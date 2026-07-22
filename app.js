@@ -239,13 +239,15 @@ function getRedirectUri() {
 // LINE LOGIN & BYPASS LOGIN LOGIC (LIFF + OAUTH)
 // ==========================================
 async function loginWithLine() {
-  // Option 1: Native LINE LIFF (Fastest, 100% Reliable, No Secret Required)
+  // Option 1: Native LINE LIFF (Fastest, 100% Reliable for Mobile & Desktop)
   if (CONFIG.LIFF_ID && typeof liff !== 'undefined') {
-    showToast('กำลังเชื่อมต่อ LINE LIFF...', 'info');
+    showToast('กำลังเชื่อมต่อ LINE...', 'info');
     try {
-      await liff.init({ liffId: CONFIG.LIFF_ID });
+      if (typeof liff.init === 'function') {
+        await liff.init({ liffId: CONFIG.LIFF_ID });
+      }
       if (!liff.isLoggedIn()) {
-        liff.login();
+        liff.login({ redirectUri: window.location.href });
         return;
       }
       const profile = await liff.getProfile();
