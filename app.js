@@ -1058,10 +1058,10 @@ function renderAdminSubmissionsTable() {
       <td><span class="fee-badge ${statusClass}">${statusText}</span></td>
       <td>
         <div style="display:flex; gap:6px;">
-          <button class="btn btn-success btn-sm" onclick="updateStatus('${sub.id}', 'Approved')" ${sub.status === 'Approved' ? 'disabled' : ''}>
+          <button class="btn btn-success btn-sm" onclick="updateStatus('${sub.id}', 'Approved')" ${sub.status !== 'Pending' ? 'disabled' : ''}>
             <i class="fa-solid fa-check"></i> อนุมัติ
           </button>
-          <button class="btn btn-danger btn-sm" onclick="updateStatus('${sub.id}', 'Rejected')" ${sub.status === 'Rejected' ? 'disabled' : ''}>
+          <button class="btn btn-danger btn-sm" onclick="updateStatus('${sub.id}', 'Rejected')" ${sub.status !== 'Pending' ? 'disabled' : ''}>
             <i class="fa-solid fa-xmark"></i> ไม่อนุมัติ
           </button>
         </div>
