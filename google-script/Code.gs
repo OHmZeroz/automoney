@@ -248,19 +248,6 @@ function doPost(e) {
       const feeName = contents.feeName;
       const status = contents.status;
       const result = updatePaymentStatusInSheet(studentId, feeName, status);
-
-      // Send LINE notification to the student about their approval/rejection status
-      try {
-        const studentLineId = getStudentLineUserId(studentId);
-        if (studentLineId) {
-          const statusText = status === 'Approved' ? '✅ อนุมัติเรียบร้อยแล้ว' : '❌ ถูกปฏิเสธ (กรุณาตรวจสอบสลิปใหม่อีกครั้ง)';
-          const pushMsg = `📢 แจ้งเตือนสถานะการชำระเงิน\n📚 รายการ: ${feeName}\nสถานะ: ${statusText}`;
-          sendLinePushMessage(studentLineId, pushMsg);
-        }
-      } catch (err) {
-        Logger.log('Student status push alert error: ' + err.toString());
-      }
-
       return createJsonResponse(result);
     }
 
