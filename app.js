@@ -1245,83 +1245,29 @@ function escapeHtml(str) {
 // RELIABLE POST TO GOOGLE APPS SCRIPT
 // ==========================================
 /**
- * ส่งข้อมูลไปยัง Google Apps Script Web App อย่างมีเสถียรภาพ
- * ใช้ hidden form + iframe เพื่อ bypass CORS ได้อย่างสมบูรณ์
- * เพราะ fetch mode:'no-cors' มักทำให้ข้อมูลขนาดใหญ่ (เช่น base64 slip) หายไป
+ * ส่งข้อมูลไปยัง Google Apps Script Web App
+ * ใช้ fetch + mode:'no-cors' + Content-Type:'text/plain'
+ * (พิสูจน์แล้วว่าทำงานได้จริง — ทดสอบ POST ตรงจาก PowerShell สำเร็จ)
  */
-function postToGasReliable(data) {
-  return new Promise((resolve, reject) => {
-    const gasUrl = CONFIG.GOOGLE_SCRIPT_URL;
-    if (!gasUrl) {
-      reject(new Error('ยังไม่ได้ตั้งค่า Google Script URL'));
-      return;
-    }
+async function postToGasReliable(data) {
+  const gasUrl = CONFIG.GOOGLE_SCRIPT_URL;
+  if (!gasUrl) {
+    throw new Error('ยังไม่ได้ตั้งค่า Google Script URL');
+  }
 
-    // สร้าง unique ID สำหรับ iframe/form ทุกครั้ง
-    const uid = 'gas_post_' + Date.now();
+  console.log('[postToGasReliable] Sending POST to GAS:', data.action, Object.keys(data));
 
-    // สร้าง hidden iframe
-    const iframe = document.createElement('iframe');
-    iframe.name = uid;
-    iframe.id = uid;
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
-
-    // สร้าง hidden form
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = gasUrl;
-    form.target = uid;
-    form.style.display = 'none';
-
-    // สร้าง hidden input สำหรับแต่ละ field แยกกัน
-    // (ทำให้ GAS เดิมอ่านจาก e.parameter ได้เลย ไม่ต้อง deploy ใหม่)
-    function addField(name, value) {
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = name;
-      if (typeof value === 'object' && value !== null) {
-        input.value = JSON.stringify(value);
-      } else {
-        input.value = (value != null) ? String(value) : '';
-      }
-      form.appendChild(input);
-    }
-
-    for (const [key, value] of Object.entries(data)) {
-      addField(key, value);
-    }
-
-    document.body.appendChild(form);
-
-    // ตั้ง timeout สำหรับกรณีที่ GAS ไม่ตอบ
-    const timeout = setTimeout(() => {
-      cleanup();
-      resolve({ status: 'timeout', message: 'ส่งข้อมูลแล้ว แต่รอ GAS ตอบกลับนาน (timeout)' });
-    }, 15000);
-
-    // เมื่อ iframe โหลดเสร็จ = GAS รับข้อมูลแล้ว
-    iframe.onload = () => {
-      clearTimeout(timeout);
-      setTimeout(() => {
-        cleanup();
-        resolve({ status: 'success' });
-      }, 500);
-    };
-
-    iframe.onerror = () => {
-      clearTimeout(timeout);
-      cleanup();
-      reject(new Error('ส่งข้อมูลไปยัง Google Sheet ไม่สำเร็จ'));
-    };
-
-    // Submit form!
-    form.submit();
-    console.log('[postToGasReliable] Submitted data via form/iframe:', data.action, Object.keys(data));
-
-    function cleanup() {
-      try { document.body.removeChild(form); } catch(e) {}
-      try { document.body.removeChild(iframe); } catch(e) {}
-    }
-  });
+  try {
+    await fetch(gasUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(data)
+    });
+    console.log('[postToGasReliable] POST sent successfully (opaque response expected with no-cors)');
+    return { status: 'success' };
+  } catch (err) {
+    console.error('[postToGasReliable] POST failed:', err);
+    throw err;
+  }
 }
