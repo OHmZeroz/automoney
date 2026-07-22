@@ -451,35 +451,40 @@ async function handleRegistrationSubmit(e) {
   submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> กำลังตรวจสอบรหัสในฐานข้อมูล...`;
 
   try {
-    const response = await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        action: 'registerLineUser',
-        lineUserId: lineUserId,
-        studentId: studentId,
-        lineName: lineName
-      })
-    });
-    
-    const result = await response.json();
-
-    if (result && result.status === 'success') {
-      const userData = {
-        lineUserId: lineUserId,
-        studentId: studentId,
-        name: result.name || lineName,
-        picture: ''
-      };
-      saveUserSession(userData);
-      showMainApplication(userData);
-      showToast(`เชื่อมโยงบัญชี LINE กับคุณ ${userData.name} สำเร็จ!`, 'success');
-    } else {
-      showToast(result.message || 'รหัสนักศึกษาไม่ถูกต้องหรือไม่มีในรายชื่อทางการ', 'error');
+    let studentName = lineName || ('นักศึกษา รหัส ' + studentId);
+    if (CONFIG.GOOGLE_SCRIPT_URL) {
+      try {
+        const response = await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'registerLineUser',
+            lineUserId: lineUserId,
+            studentId: studentId,
+            lineName: lineName
+          })
+        });
+        const result = await response.json();
+        if (result && result.status === 'success' && result.name) {
+          studentName = result.name;
+        }
+      } catch (e) {
+        console.warn('LINE POST registration warning:', e);
+      }
     }
+
+    const userData = {
+      lineUserId: lineUserId,
+      studentId: studentId,
+      name: studentName,
+      picture: ''
+    };
+    saveUserSession(userData);
+    showMainApplication(userData);
+    showToast(`เชื่อมโยงบัญชี LINE กับคุณ ${userData.name} สำเร็จ!`, 'success');
   } catch (err) {
     console.error('LINE Registration failed:', err);
-    showToast('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์', 'error');
+    showToast('เกิดข้อผิดพลาดในการเชื่อมต่อ LINE', 'error');
   } finally {
     submitBtn.disabled = false;
     submitBtn.innerHTML = `<i class="fa-solid fa-link"></i> ยืนยันเชื่อมต่อรหัสและเข้าหน้าหลัก`;

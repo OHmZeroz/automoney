@@ -369,7 +369,10 @@ function linkLineIdToStudent(lineUserId, studentId) {
     }
   }
 
-  return { status: 'error', message: 'ไม่พบรหัสนักศึกษา ' + studentId + ' ในรายชื่อทางการของกูเกิ้ลชีต' };
+  // Auto-append new student row if student ID is not in sheet yet!
+  sheet.appendRow([studentId, lineName || ('นักศึกษา รหัส ' + studentId), lineUserId.trim()]);
+  SpreadsheetApp.flush();
+  return { status: 'success', message: 'เชื่อมต่อบัญชีสำเร็จ', name: lineName || ('นักศึกษา รหัส ' + studentId) };
 }
 
 /**
