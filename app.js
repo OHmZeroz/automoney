@@ -627,7 +627,12 @@ function renderStudentDashboard() {
   }
 
   feeItems.forEach(item => {
-    const userSub = submissions.find(s => s.feeId === item.id && s.studentEmail === currentUser.email);
+    const userId = currentUser ? (currentUser.studentId || currentUser.name || currentUser.email || '') : '';
+    const userSub = submissions.find(s => {
+      const matchFee = s.feeName === item.name || s.feeId === item.id;
+      const matchUser = s.studentEmail === userId || s.studentId === userId || s.studentName === (currentUser ? currentUser.name : '');
+      return matchFee && matchUser;
+    });
     let statusBadge = '';
 
     if (userSub) {
@@ -690,7 +695,8 @@ function renderStudentHistoryTable() {
   const tbody = document.getElementById('studentHistoryTable');
   tbody.innerHTML = '';
 
-  const userSubs = submissions.filter(s => s.studentEmail === currentUser.email);
+  const userId = currentUser ? (currentUser.studentId || currentUser.name || currentUser.email || '') : '';
+  const userSubs = submissions.filter(s => s.studentEmail === userId || s.studentId === userId || s.studentName === (currentUser ? currentUser.name : ''));
   if (userSubs.length === 0) {
     tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color: var(--text-muted); padding:2rem;">ยังไม่มีประวัติการส่งสลิปชำระเงิน</td></tr>`;
     return;
