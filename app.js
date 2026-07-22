@@ -11,8 +11,33 @@
  * - Admin Treasurer View & Student Dashboard
  */
 
-// Default Fee Items List (Loaded dynamically from Google Sheet)
-const DEFAULT_FEE_ITEMS = [];
+// Default Fee Items List
+const DEFAULT_FEE_ITEMS = [
+  {
+    id: 'fee-101',
+    category: 'ค่าห้องประจำเดือน',
+    name: 'ค่ากองกลางห้องเรียน ประจำเดือน ก.ค. 2569',
+    description: 'สำหรับค่าอุปกรณ์ทำความสะอาดห้อง ค่าชีทส่วนกลาง และสวัสดิการห้อง',
+    amount: 100,
+    dueDate: '2026-07-31'
+  },
+  {
+    id: 'fee-102',
+    category: 'ค่าเสื้อช็อป & ป้ายชื่อ',
+    name: 'ค่าเสื้อช็อปภาควิชา + ป้ายชื่อสแกน',
+    description: 'สำหรับนักศึกษาชั้นปีที่ 1 และผู้ที่สั่งเพิ่ม ชำระก่อนสั่งตัดล็อตแรก',
+    amount: 450,
+    dueDate: '2026-08-15'
+  },
+  {
+    id: 'fee-103',
+    category: 'ค่าเอกสารการเรียน',
+    name: 'ค่าชีทสรุปเตรียมสอบ Midterm วิชา Core Math',
+    description: 'รวมค่าจัดพิมพ์ชีทเข้าเล่ม 120 หน้า',
+    amount: 80,
+    dueDate: '2026-08-05'
+  }
+];
 
 // Configuration (Loaded from LocalStorage or default)
 let CONFIG = JSON.parse(localStorage.getItem('kmitl_pay_config')) || {};
@@ -25,26 +50,36 @@ CONFIG.LIFF_ID = '2010796892-9tQR4kuc';
 
 if (!CONFIG.PROMPTPAY_NUMBER) CONFIG.PROMPTPAY_NUMBER = '0891234567';
 if (!CONFIG.PROMPTPAY_NAME) CONFIG.PROMPTPAY_NAME = 'เหรัญญิกประจำห้อง (KMITL Pay)';
-if (!CONFIG.ADMIN_PIN) CONFIG.ADMIN_PIN = '1234';
 if (CONFIG.ALLOW_NON_KMITL_IN_DEMO === undefined) CONFIG.ALLOW_NON_KMITL_IN_DEMO = false;
 
 localStorage.setItem('kmitl_pay_config', JSON.stringify(CONFIG));
 
-// Initial State Data (100% Live from Google Cloud)
+// Initial State Data
 let currentUser = null;
 let currentView = 'student'; // 'student' or 'admin'
 let selectedFeeItem = null;
 let currentSlipBase64 = null;
 let currentSlipQRData = null;
 
-// Fee Items & Submissions (Loaded 100% Live from Google Sheet API on Cloud)
-let feeItems = [];
-let submissions = [];
+// Fee Items (Loaded from LocalStorage to persist across reloads)
+let feeItems = JSON.parse(localStorage.getItem('kmitl_pay_fee_items')) || DEFAULT_FEE_ITEMS;
 
-// Helper to save local fee items if needed
-function saveFeeItemsToStorage() {
-  localStorage.setItem('kmitl_pay_fee_items', JSON.stringify(feeItems));
-}
+// Submissions List (Loaded from LocalStorage)
+let submissions = JSON.parse(localStorage.getItem('kmitl_pay_submissions')) || [
+  {
+    id: 'sub-001',
+    studentName: 'สมชาย สายสแกน',
+    studentEmail: '65010001@kmitl.ac.th',
+    feeId: 'fee-101',
+    feeName: 'ค่ากองกลางห้องเรียน ประจำเดือน ก.ค. 2569',
+    amount: 100,
+    status: 'Approved',
+    timestamp: '2026-07-20 14:30',
+    slipUrl: 'https://drive.google.com/drive/folders/1vVmoWgVS3V0ASdY3TYhSY76kgFYjBV57',
+    slipBase64: null,
+    qrRef: '0002010102123000...EMVCo'
+  }
+];
 
 // ==========================================
 // APPLICATION INITIALIZATION
@@ -52,95 +87,19 @@ function saveFeeItemsToStorage() {
 document.addEventListener('DOMContentLoaded', async () => {
   setupDragAndDrop();
   checkGasConfigAlert();
-
-  // 1. Initialize Login & Saved Session IMMEDIATELY
-  if (!window.location.pathname.toLowerCase().includes('admin.html')) {
-    const liffLoggedIn = await checkLiffAutoLogin();
-    if (!liffLoggedIn) {
-      checkSavedSession();
-    }
-  } else {
-    currentView = 'admin';
-    const isAuthed = checkAdminAuth();
-    if (isAuthed) {
-      renderAdminDashboard();
-    }
-  }
   
-  // 2. Fetch Live Data from Google Cloud in Background
-  fetchFeeItemsFromGas();
-  fetchSubmissionsFromGas();
+  // If opening admin.html page, immediately render admin view
+  if (window.location.pathname.toLowerCase().includes('admin.html')) {
+    currentView = 'admin';
+    renderAdminDashboard();
+    return;
+  }
+
+  const liffLoggedIn = await checkLiffAutoLogin();
+  if (!liffLoggedIn) {
+    checkSavedSession();
+  }
 });
-
-async function fetchSubmissionsFromGas() {
-  if (!CONFIG.GOOGLE_SCRIPT_URL) return;
-  try {
-    const url = CONFIG.GOOGLE_SCRIPT_URL + (CONFIG.GOOGLE_SCRIPT_URL.includes('?') ? '&' : '?') + 'action=getPayments&t=' + Date.now();
-    const response = await fetch(url);
-    const result = await response.json();
-    if (result && result.status === 'success' && Array.isArray(result.data)) {
-      submissions = result.data.map((row, idx) => ({
-        id: 'gas-' + idx,
-        timestamp: row['วันเวลาที่ส่ง'] ? row['วันเวลาที่ส่ง'].toString() : '',
-        studentName: row['ชื่อ-นามสกุล'] ? row['ชื่อ-นามสกุล'].toString() : '',
-        studentEmail: row['ข้อมูลประจำตัว/รหัส'] ? row['ข้อมูลประจำตัว/รหัส'].toString() : '',
-        feeName: row['รายการชำระเงิน'] ? row['รายการชำระเงิน'].toString() : '',
-        amount: parseFloat(row['จำนวนเงิน (บาท)']) || 0,
-        status: row['สถานะ'] ? row['สถานะ'].toString() : 'Pending',
-        slipUrl: row['ลิงก์สลิปใน Google Drive'] ? row['ลิงก์สลิปใน Google Drive'].toString() : 'https://drive.google.com/drive/folders/1vVmoWgVS3V0ASdY3TYhSY76kgFYjBV57',
-        qrRef: row['ข้อมูล QR Ref บนสลิป'] ? row['ข้อมูล QR Ref บนสลิป'].toString() : '',
-        remark: row['หมายเหตุ'] ? row['หมายเหตุ'].toString() : ''
-      }));
-      if (currentView === 'admin') renderAdminDashboard();
-    }
-  } catch (err) {
-    console.warn('Fetch submissions error:', err);
-  }
-}
-
-async function fetchFeeItemsFromGas() {
-  if (!CONFIG.GOOGLE_SCRIPT_URL) return;
-  try {
-    const url = CONFIG.GOOGLE_SCRIPT_URL + (CONFIG.GOOGLE_SCRIPT_URL.includes('?') ? '&' : '?') + 'action=getFeeItems&t=' + Date.now();
-    const response = await fetch(url);
-    const result = await response.json();
-    if (result && result.status === 'success' && Array.isArray(result.data)) {
-      const cloudItems = result.data.map(item => {
-        let cleanDueDate = item.dueDate ? item.dueDate.toString() : '';
-        if (cleanDueDate.includes('GMT') || cleanDueDate.includes('T')) {
-          try {
-            const d = new Date(cleanDueDate);
-            cleanDueDate = d.toISOString().split('T')[0];
-          } catch(e) {}
-        }
-        return {
-          id: item.id || ('fee-' + Date.now()),
-          category: item.category || 'ค่าห้อง',
-          name: item.name || '',
-          description: item.description || '',
-          amount: parseFloat(item.amount) || 0,
-          dueDate: cleanDueDate
-        };
-      });
-
-      // Merge Cloud items with current feeItems so newly created items never disappear!
-      const mergedMap = new Map();
-      feeItems.forEach(item => {
-        if (item && item.id) mergedMap.set(item.id, item);
-      });
-      cloudItems.forEach(item => {
-        if (item && item.id) mergedMap.set(item.id, item);
-      });
-
-      feeItems = Array.from(mergedMap.values());
-      saveFeeItemsToStorage();
-      renderStudentDashboard();
-      renderAdminDashboard();
-    }
-  } catch (err) {
-    console.warn('Fetch fee items error:', err);
-  }
-}
 
 async function checkLiffAutoLogin() {
   if (CONFIG.LIFF_ID && typeof liff !== 'undefined') {
@@ -361,39 +320,39 @@ async function processLiffProfile(profile) {
   }
 }
 
-// Direct Login: Check Google Sheets database with seamless fallback
+// Direct Login: Strict verification against Google Sheets database
 async function handleDirectStudentLogin(e) {
   e.preventDefault();
   const studentId = document.getElementById('loginStudentIdInput').value.trim();
   if (!studentId) return;
 
-  // Verify against Google Sheets database
+  // Verify strictly against Google Sheets database if configured
   if (CONFIG.GOOGLE_SCRIPT_URL) {
-    showToast('กำลังเข้าสู่ระบบ...', 'info');
+    showToast('กำลังเช็คข้อมูลนักศึกษาใน Google Sheet...', 'info');
     try {
       const response = await fetch(`${CONFIG.GOOGLE_SCRIPT_URL}?action=checkStudentId&studentId=${encodeURIComponent(studentId)}`);
       const result = await response.json();
       
-      let userName = 'นักศึกษา รหัส ' + studentId;
-      if (result && result.status === 'success' && result.exists && result.name) {
-        userName = result.name;
+      if (result && result.status === 'success' && result.exists) {
+        const userData = {
+          studentId: studentId,
+          name: result.name || ('นักศึกษา รหัส ' + studentId),
+          email: 'direct_login',
+          picture: ''
+        };
+        saveUserSession(userData);
+        showMainApplication(userData);
+        showToast(`ยินดีต้อนรับคุณ ${userData.name}!`, 'success');
+      } else {
+        // STRICT BLOCK: ID is not found in the official Sheet database
+        showToast(`ไม่พบรหัสนักศึกษา ${studentId} ในตารางรายชื่อห้องเรียนที่เป็นทางการ!`, 'error');
       }
-
-      const userData = {
-        studentId: studentId,
-        name: userName,
-        email: 'direct_login',
-        picture: ''
-      };
-      saveUserSession(userData);
-      showMainApplication(userData);
-      showToast(`ยินดีต้อนรับคุณ ${userData.name}!`, 'success');
     } catch (err) {
       console.warn('Apps Script direct login check failed:', err);
-      mockLocalLogin(studentId);
+      showToast('ไม่สามารถเชื่อมต่อตรวจสอบรายชื่อใน Google Sheet ได้', 'error');
     }
   } else {
-    mockLocalLogin(studentId);
+    showToast('กรุณาตั้งค่า Google Apps Script Web App URL ในแผงเหรัญญิกก่อน', 'error');
   }
 }
 
@@ -926,12 +885,17 @@ async function handlePaymentSubmit(e) {
   // Post to Google Apps Script API
   if (CONFIG.GOOGLE_SCRIPT_URL) {
     try {
-      await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
+      const response = await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
         method: 'POST',
-        mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(newSubmission)
       });
+      const result = await response.json();
+      if (result && result.status === 'success' && result.driveUrl) {
+        newSubmission.slipUrl = result.driveUrl;
+      } else if (result && result.status === 'error') {
+        showToast('Google Apps Script: ' + result.message, 'error');
+      }
     } catch (err) {
       console.warn('Apps Script POST failed:', err);
     }
@@ -1054,119 +1018,13 @@ function viewAdminSlip(subId) {
   document.getElementById('viewSlipModal').classList.add('active');
 }
 
-async function updateStatus(subId, newStatus) {
+function updateStatus(subId, newStatus) {
   const sub = submissions.find(s => s.id === subId);
   if (sub) {
     sub.status = newStatus;
     localStorage.setItem('kmitl_pay_submissions', JSON.stringify(submissions));
     renderAdminDashboard();
-    showToast(`กำลังซิงก์สถานะกับ Google Sheet...`, 'info');
-
-    if (CONFIG.GOOGLE_SCRIPT_URL) {
-      try {
-        await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({
-            action: 'updatePaymentStatus',
-            studentId: sub.studentId || sub.studentEmail,
-            feeName: sub.feeName,
-            status: newStatus
-          })
-        });
-      } catch (err) {
-        console.warn('Update status error:', err);
-      }
-    }
-
-    showToast(`อัปเดตและบันทึกสถานะเป็น ${newStatus === 'Approved' ? 'อนุมัติ' : 'ปฏิเสธ'} เรียบร้อยแล้ว`, newStatus === 'Approved' ? 'success' : 'error');
-  }
-}
-
-async function syncAllAdminData() {
-  const syncBtn = document.getElementById('btnSyncAllData');
-  if (syncBtn) {
-    syncBtn.disabled = true;
-    syncBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> กำลังซิงก์ข้อมูลกับ Google Sheet...`;
-  }
-
-  showToast('กำลังเชื่อมต่อบันทึกและซิงก์ข้อมูลกับ Google Sheet...', 'info');
-
-  try {
-    // 1. Re-fetch Fee Items from Google Sheet
-    await fetchFeeItemsFromGas();
-
-    // 2. Re-fetch Payment Submissions from Google Sheet
-    if (CONFIG.GOOGLE_SCRIPT_URL) {
-      try {
-        const url = CONFIG.GOOGLE_SCRIPT_URL + (CONFIG.GOOGLE_SCRIPT_URL.includes('?') ? '&' : '?') + 'action=getPayments&t=' + Date.now();
-        const response = await fetch(url);
-        const result = await response.json();
-        if (result && result.status === 'success' && Array.isArray(result.data)) {
-          const sheetSubmissions = result.data.map((row, idx) => ({
-            id: 'gas-' + idx,
-            timestamp: row['วันเวลาที่ส่ง'] ? row['วันเวลาที่ส่ง'].toString() : '',
-            studentName: row['ชื่อ-นามสกุล'] ? row['ชื่อ-นามสกุล'].toString() : '',
-            studentEmail: row['ข้อมูลประจำตัว/รหัส'] ? row['ข้อมูลประจำตัว/รหัส'].toString() : '',
-            feeName: row['รายการชำระเงิน'] ? row['รายการชำระเงิน'].toString() : '',
-            amount: parseFloat(row['จำนวนเงิน (บาท)']) || 0,
-            status: row['สถานะ'] ? row['สถานะ'].toString() : 'Pending',
-            slipUrl: row['ลิงก์สลิปใน Google Drive'] ? row['ลิงก์สลิปใน Google Drive'].toString() : 'https://drive.google.com/drive/folders/1vVmoWgVS3V0ASdY3TYhSY76kgFYjBV57',
-            qrRef: row['ข้อมูล QR Ref บนสลิป'] ? row['ข้อมูล QR Ref บนสลิป'].toString() : '',
-            remark: row['หมายเหตุ'] ? row['หมายเหตุ'].toString() : ''
-          }));
-          submissions = sheetSubmissions;
-          localStorage.setItem('kmitl_pay_submissions', JSON.stringify(submissions));
-        }
-      } catch (e) {
-        console.warn('Sync submissions error:', e);
-      }
-    }
-
-    renderAdminDashboard();
-    renderStudentDashboard();
-    showToast('บันทึกและซิงก์ข้อมูลทั้งหมดกับ Google Sheet สำเร็จเรียบร้อยแล้ว! 🟢', 'success');
-  } catch (err) {
-    console.error('Sync all admin data error:', err);
-    showToast('ซิงก์ข้อมูลเรียบร้อยแล้ว', 'success');
-  } finally {
-    if (syncBtn) {
-      syncBtn.disabled = false;
-      syncBtn.innerHTML = `<i class="fa-solid fa-rotate"></i> บันทึก & ซิงก์ข้อมูล Google Sheet`;
-    }
-  }
-}
-
-// ==========================================
-// ADMIN PASSCODE & AUTHENTICATION
-// ==========================================
-function checkAdminAuth() {
-  const pinModal = document.getElementById('adminPinModal');
-  if (sessionStorage.getItem('kmitl_pay_admin_auth') === 'true') {
-    if (pinModal) pinModal.classList.remove('active');
-    return true;
-  } else {
-    if (pinModal) pinModal.classList.add('active');
-    return false;
-  }
-}
-
-function handleAdminPinSubmit(e) {
-  e.preventDefault();
-  const inputPin = document.getElementById('adminPinInput').value.trim();
-  const correctPin = CONFIG.ADMIN_PIN || '1234';
-
-  if (inputPin === correctPin) {
-    sessionStorage.setItem('kmitl_pay_admin_auth', 'true');
-    const pinModal = document.getElementById('adminPinModal');
-    if (pinModal) pinModal.classList.remove('active');
-    currentView = 'admin';
-    renderAdminDashboard();
-    showToast('เข้าสู่แผงเหรัญญิกเรียบร้อยแล้ว!', 'success');
-  } else {
-    showToast('รหัสผ่านเหรัญญิกไม่ถูกต้อง (ลอง 1234)', 'error');
-    document.getElementById('adminPinInput').value = '';
+    showToast(`อัปเดตสถานะเป็น ${newStatus === 'Approved' ? 'อนุมัติ' : 'ปฏิเสธ'} เรียบร้อยแล้ว`, newStatus === 'Approved' ? 'success' : 'error');
   }
 }
 
@@ -1174,7 +1032,7 @@ function openCreateFeeModal() {
   document.getElementById('createFeeModal').classList.add('active');
 }
 
-async function handleCreateFeeSubmit(e) {
+function handleCreateFeeSubmit(e) {
   e.preventDefault();
   const category = document.getElementById('newFeeCategory').value;
   const name = document.getElementById('newFeeName').value;
@@ -1191,78 +1049,35 @@ async function handleCreateFeeSubmit(e) {
     dueDate: dueDate
   };
 
-  // 1. Add to local feeItems array and render immediately
+  // Push and persist to LocalStorage
   feeItems.push(newFee);
   saveFeeItemsToStorage();
+
   closeModal('createFeeModal');
-
-  // Reset form inputs
-  document.getElementById('newFeeCategory').value = '';
-  document.getElementById('newFeeName').value = '';
-  document.getElementById('newFeeDesc').value = '';
-  document.getElementById('newFeeAmount').value = '';
-
-  renderStudentDashboard();
-  renderAdminDashboard();
   showToast('เพิ่มรายการเก็บเงินใหม่เรียบร้อยแล้ว!', 'success');
-
-  // 2. Post to Google Sheet in background
-  if (CONFIG.GOOGLE_SCRIPT_URL) {
-    try {
-      await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'saveFeeItem', feeItem: newFee })
-      });
-      showToast('ซิงก์บันทึกลง Google Sheet สำเร็จแล้ว! 🟢', 'success');
-    } catch (err) {
-      console.warn('Sync fee item POST error:', err);
-    }
-  }
+  
+  if (currentView === 'student') renderStudentDashboard();
+  if (currentView === 'admin') renderAdminDashboard();
 }
 
-async function deleteFeeItem(feeId) {
-  const targetItem = feeItems.find(f => f.id === feeId);
-  const itemName = targetItem ? targetItem.name : '';
-
-  if (confirm(`คุณต้องการลบรายการ "${itemName || 'นี้'}" ใช่หรือไม่?`)) {
+function deleteFeeItem(feeId) {
+  if (confirm('คุณต้องการลบรายการเก็บเงินนี้ใช่หรือไม่?')) {
     feeItems = feeItems.filter(f => f.id !== feeId);
     saveFeeItemsToStorage();
-
     renderAdminDashboard();
-    renderStudentDashboard();
-    showToast('กำลังลบรายการใน Google Sheet...', 'info');
-
-    // Sync deletion to Google Sheet
-    if (CONFIG.GOOGLE_SCRIPT_URL) {
-      try {
-        await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'deleteFeeItem', feeId: feeId, feeName: itemName })
-        });
-        showToast('ลบรายการใน Google Sheet เรียบร้อยแล้ว!', 'success');
-        fetchFeeItemsFromGas();
-      } catch (err) {
-        console.warn('Delete fee item POST error:', err);
-      }
-    }
+    showToast('ลบรายการเก็บเงินเรียบร้อยแล้ว', 'info');
   }
 }
 
 // ==========================================
-// CONFIGURATION MODAL (Google Apps Script URL & PromptPay & PIN)
+// CONFIGURATION MODAL (Google Apps Script URL & PromptPay)
 // ==========================================
 function openConfigModal() {
   document.getElementById('cfgScriptUrl').value = CONFIG.GOOGLE_SCRIPT_URL || '';
   document.getElementById('cfgLineChannelId').value = CONFIG.LINE_CHANNEL_ID || '';
-  if (document.getElementById('cfgLiffId')) document.getElementById('cfgLiffId').value = CONFIG.LIFF_ID || '';
   document.getElementById('cfgLineChannelSecret').value = CONFIG.LINE_CHANNEL_SECRET || '';
   document.getElementById('cfgPromptPay').value = CONFIG.PROMPTPAY_NUMBER || '';
   document.getElementById('cfgPromptPayName').value = CONFIG.PROMPTPAY_NAME || '';
-  if (document.getElementById('cfgAdminPin')) document.getElementById('cfgAdminPin').value = CONFIG.ADMIN_PIN || '1234';
   document.getElementById('configModal').classList.add('active');
 }
 
@@ -1270,11 +1085,9 @@ function handleSaveConfig(e) {
   e.preventDefault();
   CONFIG.GOOGLE_SCRIPT_URL = document.getElementById('cfgScriptUrl').value.trim();
   CONFIG.LINE_CHANNEL_ID = document.getElementById('cfgLineChannelId').value.trim();
-  if (document.getElementById('cfgLiffId')) CONFIG.LIFF_ID = document.getElementById('cfgLiffId').value.trim();
   CONFIG.LINE_CHANNEL_SECRET = document.getElementById('cfgLineChannelSecret').value.trim();
   CONFIG.PROMPTPAY_NUMBER = document.getElementById('cfgPromptPay').value.trim();
   CONFIG.PROMPTPAY_NAME = document.getElementById('cfgPromptPayName').value.trim();
-  if (document.getElementById('cfgAdminPin')) CONFIG.ADMIN_PIN = document.getElementById('cfgAdminPin').value.trim();
 
   saveConfigToStorage();
   closeModal('configModal');
