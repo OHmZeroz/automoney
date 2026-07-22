@@ -178,19 +178,36 @@ function doGet(e) {
 function doPost(e) {
   try {
     let contents = {};
-    if (e && e.postData && e.postData.contents) {
+
+    // --- Method 1: Parse from hidden form input named 'payload' (form/iframe method) ---
+    if (e && e.parameter && e.parameter.payload) {
+      try {
+        contents = JSON.parse(e.parameter.payload);
+      } catch (err) {
+        Logger.log('Error parsing e.parameter.payload: ' + err.toString());
+      }
+    }
+    // --- Method 2: Parse from raw POST body (fetch method) ---
+    else if (e && e.postData && e.postData.contents) {
       if (typeof e.postData.contents === 'string') {
         try {
           contents = JSON.parse(e.postData.contents);
         } catch (err) {
+          // Fallback: try e.parameter directly
           contents = (e && e.parameter) ? e.parameter : {};
         }
       } else if (typeof e.postData.contents === 'object') {
         contents = e.postData.contents;
       }
-    } else if (e && e.parameter) {
+    }
+    // --- Method 3: Fallback to e.parameter ---
+    else if (e && e.parameter) {
       contents = e.parameter;
     }
+
+    // Debug log to see what data was received
+    Logger.log('doPost received action: ' + (contents.action || 'NO_ACTION'));
+    Logger.log('doPost contents keys: ' + Object.keys(contents).join(', '));
 
     const action = contents.action;
 
@@ -232,41 +249,55 @@ function doPost(e) {
       return createJsonResponse(result);
     }
 
-    // --- Action 2: Submit Payment Slip (Save to Drive & Sheet) ---
-    const studentName = contents.studentName || 'ไม่ระบุชื่อ';
-    const studentId = contents.studentId || contents.studentEmail || 'ไม่ระบุรหัส';
-    const studentEmail = studentId;
-    const feeName = contents.feeName || 'ค่าห้อง';
-    const amount = contents.amount || 0;
-    const slipBase64 = contents.slipBase64 || '';
-    const qrRef = contents.qrRef || '-';
-    const remark = contents.remark || '-';
-    const timestamp = contents.timestamp || new Date().toLocaleString('th-TH');
+    // --- Action 4: Submit Payment Slip (Save to Drive & Sheet) ---
+    if (action === 'submitPayment' || !action) {
+      Logger.log('Processing submitPayment...');
+      const studentName = contents.studentName || 'ไม่ระบุชื่อ';
+      const studentId = contents.studentId || contents.studentEmail || 'ไม่ระบุรหัส';
+      const studentEmail = studentId;
+      const feeName = contents.feeName || 'ค่าห้อง';
+      const amount = contents.amount || 0;
+      const slipBase64 = contents.slipBase64 || '';
+      const qrRef = contents.qrRef || '-';
+      const remark = contents.remark || '-';
+      const timestamp = contents.timestamp || new Date().toLocaleString('th-TH');
 
-    let slipDriveUrl = 'https://drive.google.com/drive/folders/' + CONFIG.FOLDER_ID;
+      Logger.log('Student: ' + studentName + ', Fee: ' + feeName + ', Amount: ' + amount);
 
-    if (slipBase64) {
-      slipDriveUrl = saveSlipToDrive(studentId, feeName, slipBase64);
+      let slipDriveUrl = 'https://drive.google.com/drive/folders/' + CONFIG.FOLDER_ID;
+
+      if (slipBase64) {
+        slipDriveUrl = saveSlipToDrive(studentId, feeName, slipBase64);
+        Logger.log('Slip saved to Drive: ' + slipDriveUrl);
+      }
+
+      const sheet = getOrCreatePaymentsSheet();
+      sheet.appendRow([
+        timestamp,
+        studentName,
+        studentId,
+        feeName,
+        amount,
+        'Pending',
+        slipDriveUrl,
+        qrRef,
+        remark
+      ]);
+      SpreadsheetApp.flush();
+      Logger.log('Payment row appended and flushed successfully!');
+
+      return createJsonResponse({
+        status: 'success',
+        message: 'บันทึกประวัติและสลิปเข้า Google Drive เรียบร้อยแล้ว',
+        driveUrl: slipDriveUrl
+      });
     }
 
-    const sheet = getOrCreatePaymentsSheet();
-    sheet.appendRow([
-      timestamp,
-      studentName,
-      studentId,
-      feeName,
-      amount,
-      'Pending',
-      slipDriveUrl,
-      qrRef,
-      remark
-    ]);
-    SpreadsheetApp.flush();
-
+    // --- Unknown Action ---
+    Logger.log('Unknown action received: ' + action);
     return createJsonResponse({
-      status: 'success',
-      message: 'บันทึกประวัติและสลิปเข้า Google Drive เรียบร้อยแล้ว',
-      driveUrl: slipDriveUrl
+      status: 'error',
+      message: 'ไม่รู้จัก action: ' + (action || 'ไม่มี')
     });
 
   } catch (error) {

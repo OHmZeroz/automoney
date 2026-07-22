@@ -951,20 +951,16 @@ async function handlePaymentSubmit(e) {
     remark: document.getElementById('paymentRemark').value || '-'
   };
 
-  // Post to Google Apps Script API
+  // Post to Google Apps Script API (ใช้ hidden form + iframe เพื่อ bypass CORS อย่างมีเสถียรภาพ)
   if (CONFIG.GOOGLE_SCRIPT_URL) {
     try {
       newSubmission.action = 'submitPayment';
-      await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(newSubmission)
-      });
+      await postToGasReliable(newSubmission);
       showToast('ส่งสลิปชำระเงินเรียบร้อย! บันทึกลง Google Sheet & Drive แล้ว 🟢', 'success');
-      setTimeout(fetchSubmissionsFromGas, 1500);
+      setTimeout(fetchSubmissionsFromGas, 2500);
     } catch (err) {
       console.warn('Apps Script POST failed:', err);
+      showToast('เกิดข้อผิดพลาดในการส่งข้อมูล: ' + err.message, 'error');
     }
   }
 
@@ -1159,12 +1155,7 @@ async function handleCreateFeeSubmit(e) {
   // Sync / Post to Google Sheet in background
   if (CONFIG.GOOGLE_SCRIPT_URL) {
     try {
-      await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'saveFeeItem', feeItem: newFee })
-      });
+      await postToGasReliable({ action: 'saveFeeItem', feeItem: newFee });
       showToast('ซิงก์บันทึกลง Google Sheet เรียบร้อยแล้ว! 🟢', 'success');
     } catch (err) {
       console.warn('Sync fee item POST error:', err);
@@ -1182,15 +1173,10 @@ async function deleteFeeItem(feeId) {
 
     if (CONFIG.GOOGLE_SCRIPT_URL) {
       try {
-        await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({
-            action: 'deleteFeeItem',
-            feeId: feeId,
-            feeName: itemToDelete ? itemToDelete.name : ''
-          })
+        await postToGasReliable({
+          action: 'deleteFeeItem',
+          feeId: feeId,
+          feeName: itemToDelete ? itemToDelete.name : ''
         });
         showToast('ลบรายการออกจาก Google Sheet เรียบร้อยแล้ว 🟢', 'success');
       } catch (err) {
@@ -1253,4 +1239,80 @@ function escapeHtml(str) {
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#039;");
+}
+
+// ==========================================
+// RELIABLE POST TO GOOGLE APPS SCRIPT
+// ==========================================
+/**
+ * ส่งข้อมูลไปยัง Google Apps Script Web App อย่างมีเสถียรภาพ
+ * ใช้ hidden form + iframe เพื่อ bypass CORS ได้อย่างสมบูรณ์
+ * เพราะ fetch mode:'no-cors' มักทำให้ข้อมูลขนาดใหญ่ (เช่น base64 slip) หายไป
+ */
+function postToGasReliable(data) {
+  return new Promise((resolve, reject) => {
+    const gasUrl = CONFIG.GOOGLE_SCRIPT_URL;
+    if (!gasUrl) {
+      reject(new Error('ยังไม่ได้ตั้งค่า Google Script URL'));
+      return;
+    }
+
+    // สร้าง unique ID สำหรับ iframe/form ทุกครั้ง
+    const uid = 'gas_post_' + Date.now();
+
+    // สร้าง hidden iframe
+    const iframe = document.createElement('iframe');
+    iframe.name = uid;
+    iframe.id = uid;
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+
+    // สร้าง hidden form
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = gasUrl;
+    form.target = uid;
+    form.style.display = 'none';
+
+    // ส่งข้อมูลทั้งก้อนเป็น JSON string ใน hidden input ชื่อ 'payload'
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'payload';
+    input.value = JSON.stringify(data);
+    form.appendChild(input);
+
+    document.body.appendChild(form);
+
+    // ตั้ง timeout สำหรับกรณีที่ GAS ไม่ตอบ
+    const timeout = setTimeout(() => {
+      cleanup();
+      // ถึงแม้จะ timeout ก็ถือว่าส่งข้อมูลไปแล้ว (GAS อาจทำงานช้า)
+      resolve({ status: 'timeout', message: 'ส่งข้อมูลแล้ว แต่รอ GAS ตอบกลับนาน (timeout)' });
+    }, 15000);
+
+    // เมื่อ iframe โหลดเสร็จ = GAS รับข้อมูลแล้ว
+    iframe.onload = () => {
+      clearTimeout(timeout);
+      // รอเพิ่มอีกนิดเพื่อให้ GAS flush ข้อมูลลง sheet
+      setTimeout(() => {
+        cleanup();
+        resolve({ status: 'success' });
+      }, 500);
+    };
+
+    iframe.onerror = () => {
+      clearTimeout(timeout);
+      cleanup();
+      reject(new Error('ส่งข้อมูลไปยัง Google Sheet ไม่สำเร็จ'));
+    };
+
+    // Submit form!
+    form.submit();
+    console.log('[postToGasReliable] Submitted data via form/iframe:', data.action);
+
+    function cleanup() {
+      try { document.body.removeChild(form); } catch(e) {}
+      try { document.body.removeChild(iframe); } catch(e) {}
+    }
+  });
 }
