@@ -30,32 +30,21 @@ if (CONFIG.ALLOW_NON_KMITL_IN_DEMO === undefined) CONFIG.ALLOW_NON_KMITL_IN_DEMO
 
 localStorage.setItem('kmitl_pay_config', JSON.stringify(CONFIG));
 
-// Initial State Data
+// Initial State Data (100% Live from Google Cloud)
 let currentUser = null;
 let currentView = 'student'; // 'student' or 'admin'
 let selectedFeeItem = null;
 let currentSlipBase64 = null;
 let currentSlipQRData = null;
 
-// Fee Items (Loaded from Google Sheet API)
-let feeItems = JSON.parse(localStorage.getItem('kmitl_pay_fee_items')) || [];
+// Fee Items & Submissions (Loaded 100% Live from Google Sheet API on Cloud)
+let feeItems = [];
+let submissions = [];
 
-// Submissions List (Loaded from LocalStorage)
-let submissions = JSON.parse(localStorage.getItem('kmitl_pay_submissions')) || [
-  {
-    id: 'sub-001',
-    studentName: 'สมชาย สายสแกน',
-    studentEmail: '65010001@kmitl.ac.th',
-    feeId: 'fee-101',
-    feeName: 'ค่ากองกลางห้องเรียน ประจำเดือน ก.ค. 2569',
-    amount: 100,
-    status: 'Approved',
-    timestamp: '2026-07-20 14:30',
-    slipUrl: 'https://drive.google.com/drive/folders/1vVmoWgVS3V0ASdY3TYhSY76kgFYjBV57',
-    slipBase64: null,
-    qrRef: '0002010102123000...EMVCo'
-  }
-];
+// Helper to save local fee items if needed
+function saveFeeItemsToStorage() {
+  localStorage.setItem('kmitl_pay_fee_items', JSON.stringify(feeItems));
+}
 
 // ==========================================
 // APPLICATION INITIALIZATION
@@ -63,7 +52,10 @@ let submissions = JSON.parse(localStorage.getItem('kmitl_pay_submissions')) || [
 document.addEventListener('DOMContentLoaded', async () => {
   setupDragAndDrop();
   checkGasConfigAlert();
-  fetchFeeItemsFromGas();
+  
+  // 100% Cloud Live Fetching from Google Sheet
+  await fetchFeeItemsFromGas();
+  await fetchSubmissionsFromGas();
   
   // If opening admin.html page, immediately check admin PIN authentication
   if (window.location.pathname.toLowerCase().includes('admin.html')) {
@@ -80,6 +72,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     checkSavedSession();
   }
 });
+
+async function fetchSubmissionsFromGas() {
+  if (!CONFIG.GOOGLE_SCRIPT_URL) return;
+  try {
+    const url = CONFIG.GOOGLE_SCRIPT_URL + (CONFIG.GOOGLE_SCRIPT_URL.includes('?') ? '&' : '?') + 'action=getPayments&t=' + Date.now();
+    const response = await fetch(url);
+    const result = await response.json();
+    if (result && result.status === 'success' && Array.isArray(result.data)) {
+      submissions = result.data.map((row, idx) => ({
+        id: 'gas-' + idx,
+        timestamp: row['วันเวลาที่ส่ง'] ? row['วันเวลาที่ส่ง'].toString() : '',
+        studentName: row['ชื่อ-นามสกุล'] ? row['ชื่อ-นามสกุล'].toString() : '',
+        studentEmail: row['ข้อมูลประจำตัว/รหัส'] ? row['ข้อมูลประจำตัว/รหัส'].toString() : '',
+        feeName: row['รายการชำระเงิน'] ? row['รายการชำระเงิน'].toString() : '',
+        amount: parseFloat(row['จำนวนเงิน (บาท)']) || 0,
+        status: row['สถานะ'] ? row['สถานะ'].toString() : 'Pending',
+        slipUrl: row['ลิงก์สลิปใน Google Drive'] ? row['ลิงก์สลิปใน Google Drive'].toString() : 'https://drive.google.com/drive/folders/1vVmoWgVS3V0ASdY3TYhSY76kgFYjBV57',
+        qrRef: row['ข้อมูล QR Ref บนสลิป'] ? row['ข้อมูล QR Ref บนสลิป'].toString() : '',
+        remark: row['หมายเหตุ'] ? row['หมายเหตุ'].toString() : ''
+      }));
+      if (currentView === 'admin') renderAdminDashboard();
+    }
+  } catch (err) {
+    console.warn('Fetch submissions error:', err);
+  }
+}
 
 async function fetchFeeItemsFromGas() {
   if (!CONFIG.GOOGLE_SCRIPT_URL) return;
