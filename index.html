@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบเก็บเงินห้องเรียน KMITL | Class Payment System</title>
+  
+  <!-- SEO & Meta -->
+  <meta name="description" content="ระบบชำระเงินและจัดการค่าใช้จ่ายประจำห้องเรียนสำหรับนักศึกษา KMITL พร้อมระบบสแกนสลิป และจัดเก็บ Google Drive / Sheets">
+  <meta name="theme-color" content="#ff6b00">
+
+  <!-- External Libraries & Fonts -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="styles.css">
+  
+  <!-- Google Sign-In API -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <!-- QRCode & jsQR Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+</head>
+<body>
+
+  <!-- Navigation Bar -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="#" class="brand">
+        <div class="brand-logo">K</div>
+        <div class="brand-text">
+          <h1>KMITL Class Pay</h1>
+          <span>ระบบเก็บเงินห้องเรียน</span>
+        </div>
+      </a>
+
+      <!-- View Switcher & User Profile -->
+      <div class="nav-controls" id="navControls" style="display: none;">
+        <div class="view-tabs">
+          <button class="tab-btn active" id="tabStudentBtn" onclick="switchView('student')">
+            <i class="fa-solid fa-graduation-cap"></i> นักศึกษา
+          </button>
+          <button class="tab-btn" id="tabAdminBtn" onclick="switchView('admin')">
+            <i class="fa-solid fa-user-shield"></i> เหรัญญิก (Admin)
+          </button>
+        </div>
+
+        <div class="user-profile">
+          <div class="user-avatar" id="userAvatar">K</div>
+          <div class="user-info">
+            <span class="user-name" id="userName">Student Name</span>
+            <span class="user-email" id="userEmail">65010000@kmitl.ac.th</span>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="logoutUser()" title="ออกจากระบบ">
+            <i class="fa-solid fa-right-from-bracket"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- LOGIN SECTION (Shown when not authenticated) -->
+  <section id="loginSection" class="app-container">
+    <div class="glass-panel login-card">
+      <div class="login-icon" style="background: linear-gradient(135deg, #06C755, #05b04b);">
+        <i class="fa-brands fa-line" style="font-size: 2.5rem; margin-top: 1px;"></i>
+      </div>
+      <h2 class="login-title">เข้าสู่ระบบเก็บเงินห้อง</h2>
+      <p class="login-subtitle">เข้าสู่ระบบด้วยบัญชี <strong>LINE</strong> เพื่อลงทะเบียนและตรวจสอบสลิปเงินห้องเรียน</p>
+
+      <!-- LINE Login Button -->
+      <button onclick="loginWithLine()" class="btn" style="background-color: #06C755; color: #fff; width: 100%; padding: 14px; font-size: 1rem; border-radius: var(--radius-md); font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 4px 15px rgba(6, 199, 85, 0.3); transition: var(--transition-fast);">
+        <i class="fa-brands fa-line" style="font-size: 1.5rem;"></i> เข้าสู่ระบบด้วย LINE
+      </button>
+
+      <div style="margin: 1.5rem 0; color: var(--text-muted); font-size: 0.8rem;">— หรือ เข้าใช้งานด่วนด่วน —</div>
+
+      <!-- Quick Bypass Login (Type Student ID or Name) -->
+      <form onsubmit="handleDirectStudentLogin(event)" style="text-align: left;">
+        <div class="form-group" style="margin-bottom: 0.75rem;">
+          <input type="text" id="loginStudentIdInput" class="form-control" placeholder="ป้อนรหัสนักศึกษา หรือ ชื่อ เช่น 69010012 หรือ เก้า" style="text-align: center;" required>
+        </div>
+        <button type="submit" class="btn btn-secondary" style="width: 100%; padding: 12px;">
+          <i class="fa-solid fa-arrow-right-to-bracket" style="color: var(--kmitl-orange);"></i> เข้าสู่ระบบด่วน
+        </button>
+      </form>
+    </div>
+  </section>
+
+  <!-- FIRST-TIME REGISTRATION SECTION (Shown when LINE profile is loaded but not linked yet) -->
+  <section id="registerSection" class="app-container" style="display: none;">
+    <div class="glass-panel login-card">
+      <div class="login-icon" style="background: linear-gradient(135deg, var(--kmitl-gold), var(--kmitl-orange));">
+        <i class="fa-solid fa-address-card"></i>
+      </div>
+      <h2 class="login-title">เชื่อมโยงรหัสครั้งแรก</h2>
+      <p class="login-subtitle">
+        บัญชี LINE: <strong id="registerLineNameText" style="color:#06C755;">LINE User</strong> 
+        ยังไม่ได้เชื่อมต่อกับรหัสนักศึกษา กรุณาระบุรหัสเพื่อลงทะเบียนในรายชื่อห้องเรียน
+      </p>
+
+      <form id="registerForm" onsubmit="handleRegistrationSubmit(event)">
+        <div class="form-group" style="text-align: left;">
+          <label class="form-label">รหัสนักศึกษา *</label>
+          <input type="text" id="registerStudentId" class="form-control" placeholder="เช่น 65010001" required>
+        </div>
+        
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem; padding: 12px;">
+          <i class="fa-solid fa-link"></i> ยืนยันเชื่อมต่อรหัสและเข้าหน้าหลัก
+        </button>
+      </form>
+
+      <button class="btn btn-secondary btn-sm" style="width: 100%; margin-top: 1rem;" onclick="logoutUser()">
+        <i class="fa-solid fa-arrow-left"></i> ย้อนกลับไปหน้าล็อกอิน
+      </button>
+    </div>
+  </section>
+
+  <!-- MAIN APP CONTAINER (Shown when authenticated) -->
+  <main id="mainAppSection" class="app-container" style="display: none;">
+
+    <!-- STUDENT VIEW -->
+    <div id="studentView">
+      <!-- Hero Banner -->
+      <section class="glass-panel hero-section">
+        <div class="hero-title">
+          <h2>ยินดีต้อนรับ, <span id="welcomeStudentName">นักศึกษา</span> 👋</h2>
+          <p>สรุปยอดค่าใช้จ่ายประจำห้องเรียน ประจำปีการศึกษา 2569</p>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-label">ค้างชำระ</div>
+            <div class="stat-value" id="statUnpaid">฿0</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">รอตรวจสอบ</div>
+            <div class="stat-value" style="color: #60a5fa;" id="statPending">0 รายการ</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">ชำระแล้ว</div>
+            <div class="stat-value" style="color: var(--color-success);" id="statPaid">฿0</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Active Fee Items Section -->
+      <div class="section-header">
+        <h3 class="section-title">
+          <i class="fa-solid fa-receipt"></i> รายการค่าใช้จ่ายที่ต้องชำระ
+        </h3>
+      </div>
+
+      <div class="items-grid" id="feeItemsGrid">
+        <!-- Dynamic Fee Cards Rendered via JavaScript -->
+      </div>
+
+      <!-- History Table Section -->
+      <div class="section-header">
+        <h3 class="section-title">
+          <i class="fa-solid fa-clock-rotate-left"></i> ประวัติการส่งสลิปชำระเงิน
+        </h3>
+      </div>
+      
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>วันที่ส่ง</th>
+              <th>รายการ</th>
+              <th>จำนวนเงิน</th>
+              <th>ข้อมูลสลิป</th>
+              <th>สถานะ</th>
+              <th>Google Drive</th>
+            </tr>
+          </thead>
+          <tbody id="studentHistoryTable">
+            <!-- Rendered by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ADMIN / TREASURER VIEW -->
+    <div id="adminView" style="display: none;">
+      <section class="glass-panel hero-section" style="margin-bottom: 2rem;">
+        <div class="hero-title">
+          <h2><i class="fa-solid fa-user-shield" style="color: var(--kmitl-orange);"></i> แผงควบคุมเหรัญญิกห้อง</h2>
+          <p>ตรวจสอบสลิปการชำระเงิน อนุมัติยอด และเชื่อมโยงข้อมูลกับ Google Sheet / Drive</p>
+        </div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <button class="btn btn-secondary" onclick="openConfigModal()">
+            <i class="fa-solid fa-gear"></i> ตั้งค่าเชื่อมต่อ Google
+          </button>
+          <button class="btn btn-primary" onclick="openCreateFeeModal()">
+            <i class="fa-solid fa-plus"></i> เพิ่มรายการเก็บเงินใหม่
+          </button>
+        </div>
+      </section>
+
+      <!-- Connection Status Alert -->
+      <div id="gasStatusAlert" style="margin-bottom: 1.5rem; display: none;"></div>
+
+      <!-- Admin Fee Items Management -->
+      <div class="section-header">
+        <h3 class="section-title">
+          <i class="fa-solid fa-folder-plus"></i> จัดการรายการเก็บเงินห้องที่สร้างไว้
+        </h3>
+      </div>
+
+      <div class="table-container" style="margin-bottom: 2.5rem;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ชื่อรายการ</th>
+              <th>หมวดหมู่</th>
+              <th>จำนวนเงิน</th>
+              <th>วันครบกำหนด</th>
+              <th>การจัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="adminFeeItemsTable">
+            <!-- Rendered by JS -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Admin Data Verification Table -->
+      <div class="section-header">
+        <h3 class="section-title">
+          <i class="fa-solid fa-list-check"></i> รายการส่งสลิปจากเพื่อนในห้องทั้งหมด
+        </h3>
+      </div>
+
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>เวลาส่ง</th>
+              <th>ชื่อนักศึกษา / รหัส</th>
+              <th>รายการ</th>
+              <th>ยอดเงิน</th>
+              <th>รูปสลิป / สแกน QR</th>
+              <th>สถานะ</th>
+              <th>การจัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="adminSubmissionsTable">
+            <!-- Rendered by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- PAYMENT MODAL -->
+  <div class="modal-overlay" id="paymentModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modalFeeTitle">ชำระเงิน: ค่าห้องประจำเดือน</h3>
+        <button class="close-btn" onclick="closeModal('paymentModal')">&times;</button>
+      </div>
+
+      <!-- PromptPay QR Code Display -->
+      <div class="qr-box-wrapper">
+        <div class="promptpay-header">
+          <i class="fa-solid fa-qrcode" style="color: #003b6a; font-size: 1.4rem;"></i>
+          <span style="font-weight: 700; color: #003b6a; font-size: 1.1rem;">PromptPay (พร้อมเพย์)</span>
+        </div>
+        <div class="qr-canvas-container">
+          <canvas id="qrCanvas" style="display: none;"></canvas>
+          <img id="qrImg" src="" alt="PromptPay QR Code" style="width: 220px; height: 220px; border-radius: 8px; display: block; margin: 0 auto;">
+        </div>
+        <div class="qr-amount" id="modalPromptPayAmount">฿100.00</div>
+        <div class="qr-receiver" id="modalPromptPayReceiver">ชื่อบัญชี: เหรัญญิกห้อง KMITL (PromptPay: 0891234567)</div>
+      </div>
+
+      <form id="paymentForm" onsubmit="handlePaymentSubmit(event)">
+        <!-- File Dropzone -->
+        <div class="form-group">
+          <label class="form-label">แนบรูปภาพสลิปการโอนเงิน *</label>
+          <div class="dropzone" id="slipDropzone" onclick="document.getElementById('slipInput').click()">
+            <div class="dropzone-icon">
+              <i class="fa-solid fa-cloud-arrow-up"></i>
+            </div>
+            <div class="dropzone-text">ลากรูปภาพสลิปมาวางที่นี่ หรือ คลิกเพื่อเลือกไฟล์</div>
+            <div class="dropzone-hint">ระบบจะสแกน QR Code บนสลิปอัตโนมัติ (รองรับ PNG, JPG, JPEG)</div>
+          </div>
+          <input type="file" id="slipInput" accept="image/*" style="display: none;" onclick="this.value = null;" onchange="handleFileSelect(event)">
+        </div>
+
+        <!-- Slip Preview & Scan Result -->
+        <div class="slip-preview-container" id="slipPreviewBox">
+          <img src="" id="slipPreviewImg" class="slip-preview-img" alt="Slip Preview">
+          <div class="slip-scan-status" id="slipScanResult">
+            <i class="fa-solid fa-spinner fa-spin"></i> กำลังตรวจสอบ QR Code บนสลิป...
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">หมายเหตุเพิ่มเติม (ถ้ามี)</label>
+          <input type="text" id="paymentRemark" class="form-control" placeholder="เช่น โอนจากบัญชีธนาคารกรุงเทพ">
+        </div>
+
+        <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('paymentModal')">ยกเลิก</button>
+          <button type="submit" class="btn btn-primary" id="btnSubmitPayment">
+            <i class="fa-solid fa-paper-plane"></i> ยืนยันการส่งสลิป
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- SLIP VIEW MODAL FOR ADMIN -->
+  <div class="modal-overlay" id="viewSlipModal">
+    <div class="modal-content" style="text-align: center;">
+      <div class="modal-header">
+        <h3 class="modal-title">ตรวจสอบสลิปการโอนเงิน</h3>
+        <button class="close-btn" onclick="closeModal('viewSlipModal')">&times;</button>
+      </div>
+      <img src="" id="adminSlipFullImg" style="max-width: 100%; max-height: 450px; border-radius: 12px; margin-bottom: 1rem;">
+      <div id="adminSlipMeta" style="text-align: left; background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 10px; margin-bottom: 1.5rem;">
+      </div>
+      <div style="display: flex; gap: 12px; justify-content: center;">
+        <a id="adminDriveLinkBtn" href="#" target="_blank" class="btn btn-secondary">
+          <i class="fa-solid fa-folder-open"></i> เปิดดูใน Google Drive
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREATE NEW FEE MODAL FOR ADMIN -->
+  <div class="modal-overlay" id="createFeeModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">สร้างรายการเก็บเงินห้องใหม่</h3>
+        <button class="close-btn" onclick="closeModal('createFeeModal')">&times;</button>
+      </div>
+      <form onsubmit="handleCreateFeeSubmit(event)">
+        <div class="form-group">
+          <label class="form-label">หมวดหมู่</label>
+          <input type="text" id="newFeeCategory" class="form-control" placeholder="เช่น ค่าห้อง, ค่าเสื้อ, ค่ากิจกรรม" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">ชื่อรายการเก็บเงิน *</label>
+          <input type="text" id="newFeeName" class="form-control" placeholder="เช่น ค่าชีทเรียนวิชา Web Dev" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">รายละเอียด</label>
+          <textarea id="newFeeDesc" class="form-control" rows="3" placeholder="ระบุรายละเอียด เช่น กำหนดส่งภายในสิ้นเดือน"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">จำนวนเงิน (บาท) *</label>
+          <input type="number" id="newFeeAmount" class="form-control" min="1" step="0.5" placeholder="100" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">วันกำหนดส่ง</label>
+          <input type="date" id="newFeeDueDate" class="form-control">
+        </div>
+        <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('createFeeModal')">ยกเลิก</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-plus"></i> บันทึกรายการ
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- GOOGLE SETTINGS MODAL FOR ADMIN -->
+  <div class="modal-overlay" id="configModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="fa-solid fa-gear" style="color: var(--kmitl-orange);"></i> ตั้งค่าการเชื่อมต่อ Google</h3>
+        <button class="close-btn" onclick="closeModal('configModal')">&times;</button>
+      </div>
+      <form onsubmit="handleSaveConfig(event)">
+        <div class="form-group">
+          <label class="form-label">Google Apps Script Web App URL *</label>
+          <input type="url" id="cfgScriptUrl" class="form-control" placeholder="https://script.google.com/macros/s/AKfycb.../exec" required>
+          <small style="color: var(--text-secondary); font-size: 0.775rem; margin-top: 4px; display: block;">
+            URL ที่ได้จากการกด Deploy -> Web App ใน Google Apps Script ของคุณ
+          </small>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">LINE Login Channel ID (ถ้าใช้ระบบล็อกอิน LINE)</label>
+          <input type="text" id="cfgLineChannelId" class="form-control" placeholder="ป้อน LINE Channel ID">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">LINE Login Channel Secret</label>
+          <input type="password" id="cfgLineChannelSecret" class="form-control" placeholder="ป้อน LINE Channel Secret (จะถูกเก็บไว้ปลอดภัยในระบบ)">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">เบอร์พร้อมเพย์ (PromptPay Number) *</label>
+          <input type="text" id="cfgPromptPay" class="form-control" placeholder="0891234567" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">ชื่อบัญชีรับเงิน *</label>
+          <input type="text" id="cfgPromptPayName" class="form-control" placeholder="เหรัญญิกห้อง KMITL" required>
+        </div>
+
+        <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('configModal')">ยกเลิก</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-floppy-disk"></i> บันทึกการตั้งค่า
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- App Script Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
