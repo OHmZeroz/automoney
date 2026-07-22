@@ -902,7 +902,7 @@ async function handlePaymentSubmit(e) {
   }
 
   // Update Local Submissions Array
-  submissions = submissions.filter(s => !(s.feeId === newSubmission.feeId && s.studentEmail === studentEmail));
+  submissions = submissions.filter(s => !(s.feeId === newSubmission.feeId && (s.studentId === studentId || s.studentEmail === studentId)));
   submissions.unshift(newSubmission);
   localStorage.setItem('kmitl_pay_submissions', JSON.stringify(submissions));
 

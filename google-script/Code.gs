@@ -177,6 +177,7 @@ function doPost(e) {
     // --- Action 2: Submit Payment Slip (Save to Drive & Sheet) ---
     const studentName = contents.studentName || 'ไม่ระบุชื่อ';
     const studentId = contents.studentId || contents.studentEmail || 'ไม่ระบุรหัส';
+    const studentEmail = studentId;
     const feeName = contents.feeName || 'ค่าห้อง';
     const amount = contents.amount || 0;
     const slipBase64 = contents.slipBase64 || '';
@@ -194,7 +195,7 @@ function doPost(e) {
     sheet.appendRow([
       timestamp,
       studentName,
-      studentEmail,
+      studentId,
       feeName,
       amount,
       'Pending',
