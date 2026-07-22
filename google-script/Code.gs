@@ -248,6 +248,19 @@ function doPost(e) {
       const feeName = contents.feeName;
       const status = contents.status;
       const result = updatePaymentStatusInSheet(studentId, feeName, status);
+
+      // Send LINE notification to the student about their approval/rejection status
+      try {
+        const studentLineId = getStudentLineUserId(studentId);
+        if (studentLineId) {
+          const statusText = status === 'Approved' ? '✅ อนุมัติเรียบร้อยแล้ว' : '❌ ถูกปฏิเสธ (กรุณาตรวจสอบสลิปใหม่อีกครั้ง)';
+          const pushMsg = `📢 แจ้งเตือนสถานะการชำระเงิน\n📚 รายการ: ${feeName}\nสถานะ: ${statusText}`;
+          sendLinePushMessage(studentLineId, pushMsg);
+        }
+      } catch (err) {
+        Logger.log('Student status push alert error: ' + err.toString());
+      }
+
       return createJsonResponse(result);
     }
 
@@ -862,4 +875,29 @@ function saveSystemConfigToSheet(settings) {
   });
   SpreadsheetApp.flush();
   return { status: 'success', message: 'บันทึกการตั้งค่าระบบเรียบร้อยแล้ว' };
+}
+
+function getStudentLineUserId(studentId) {
+  if (!studentId) return null;
+  const ss = getSpreadsheet();
+  const sheet = getStudentSheet(ss);
+  if (!sheet) return null;
+
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const idColIdx = findColumnIndex(headers, ['เลขประจำตัว', 'รหัสนักศึกษา', 'student id', 'id']);
+  const lineColIdx = findColumnIndex(headers, ['line id', 'line_id', 'line', 'ไลน์', 'ติดต่อ']);
+
+  if (idColIdx === -1 || lineColIdx === -1) return null;
+
+  const cleanSearchId = studentId.toString().split('.')[0].replace(/[^0-9a-zA-Z]/g, '').trim().toLowerCase();
+
+  for (let i = 1; i < data.length; i++) {
+    if (!data[i][idColIdx]) continue;
+    const cleanRowId = data[i][idColIdx].toString().split('.')[0].replace(/[^0-9a-zA-Z]/g, '').trim().toLowerCase();
+    if (cleanRowId === cleanSearchId) {
+      return data[i][lineColIdx] ? data[i][lineColIdx].toString().trim() : null;
+    }
+  }
+  return null;
 }
