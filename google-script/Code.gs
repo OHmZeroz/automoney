@@ -127,6 +127,12 @@ function doGet(e) {
       }
     }
 
+    // --- Action 3: Get Fee Items List ---
+    if (action === 'getFeeItems') {
+      const items = getOrCreateFeeItemsSheet();
+      return createJsonResponse({ status: 'success', data: items });
+    }
+
     // Default: Get all payments (for admin verification panel)
     const sheet = getOrCreatePaymentsSheet();
     const data = sheet.getDataRange().getValues();
@@ -171,6 +177,20 @@ function doPost(e) {
       }
 
       const result = linkLineIdToStudent(lineUserId, studentId);
+      return createJsonResponse(result);
+    }
+
+    // --- Action 2: Save New Fee Item to Sheet ---
+    if (action === 'saveFeeItem') {
+      const feeItem = contents.feeItem;
+      const result = saveFeeItemToSheet(feeItem);
+      return createJsonResponse(result);
+    }
+
+    // --- Action 3: Delete Fee Item from Sheet ---
+    if (action === 'deleteFeeItem') {
+      const feeId = contents.feeId;
+      const result = deleteFeeItemFromSheet(feeId);
       return createJsonResponse(result);
     }
 
@@ -520,4 +540,77 @@ function getOrCreatePaymentsSheet() {
 function createJsonResponse(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Get or Initialize Fee Items Sheet (รายการเก็บเงิน)
+ */
+function getOrCreateFeeItemsSheet() {
+  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  let sheet = ss.getSheetByName('รายการเก็บเงิน');
+  if (!sheet) {
+    sheet = ss.insertSheet('รายการเก็บเงิน');
+    sheet.appendRow(['ID', 'หมวดหมู่', 'ชื่อรายการ', 'รายละเอียด', 'จำนวนเงิน', 'วันครบกำหนด']);
+    const headerRange = sheet.getRange(1, 1, 1, 6);
+    headerRange.setBackground('#ff6b00');
+    headerRange.setFontColor('#ffffff');
+    headerRange.setFontWeight('bold');
+    
+    // Add default fee item row
+    sheet.appendRow(['fee-101', 'ค่าห้อง', 'ค่ากองกลางห้องเรียน ประจำเดือน ก.ค. 2569', 'สำหรับเป็นค่าเอกสารและอุปกรณ์กองกลาง', 100, '2026-07-31']);
+  }
+  
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  
+  const items = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0]) {
+      items.push({
+        id: data[i][0].toString(),
+        category: data[i][1] ? data[i][1].toString() : 'ค่าห้อง',
+        name: data[i][2] ? data[i][2].toString() : '',
+        description: data[i][3] ? data[i][3].toString() : '',
+        amount: parseFloat(data[i][4]) || 0,
+        dueDate: data[i][5] ? data[i][5].toString() : ''
+      });
+    }
+  }
+  return items;
+}
+
+function saveFeeItemToSheet(item) {
+  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  let sheet = ss.getSheetByName('รายการเก็บเงิน');
+  if (!sheet) {
+    getOrCreateFeeItemsSheet();
+    sheet = ss.getSheetByName('รายการเก็บเงิน');
+  }
+  
+  sheet.appendRow([
+    item.id || ('fee-' + Date.now()),
+    item.category || 'ค่าห้อง',
+    item.name || '',
+    item.description || '',
+    item.amount || 0,
+    item.dueDate || ''
+  ]);
+  SpreadsheetApp.flush();
+  return { status: 'success', message: 'บันทึกรายการเก็บเงินเรียบร้อยแล้ว' };
+}
+
+function deleteFeeItemFromSheet(feeId) {
+  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const sheet = ss.getSheetByName('รายการเก็บเงิน');
+  if (!sheet) return { status: 'error', message: 'ไม่พบชีตรายการเก็บเงิน' };
+  
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] && data[i][0].toString() === feeId.toString()) {
+      sheet.deleteRow(i + 1);
+      SpreadsheetApp.flush();
+      return { status: 'success', message: 'ลบรายการเก็บเงินเรียบร้อยแล้ว' };
+    }
+  }
+  return { status: 'error', message: 'ไม่พบรายการเก็บเงินที่ต้องการลบ' };
 }

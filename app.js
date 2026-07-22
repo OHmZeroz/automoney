@@ -50,6 +50,7 @@ CONFIG.LIFF_ID = '2010796892-9tQR4kuc';
 
 if (!CONFIG.PROMPTPAY_NUMBER) CONFIG.PROMPTPAY_NUMBER = '0891234567';
 if (!CONFIG.PROMPTPAY_NAME) CONFIG.PROMPTPAY_NAME = 'เหรัญญิกประจำห้อง (KMITL Pay)';
+if (!CONFIG.ADMIN_PIN) CONFIG.ADMIN_PIN = '1234';
 if (CONFIG.ALLOW_NON_KMITL_IN_DEMO === undefined) CONFIG.ALLOW_NON_KMITL_IN_DEMO = false;
 
 localStorage.setItem('kmitl_pay_config', JSON.stringify(CONFIG));
@@ -87,11 +88,15 @@ let submissions = JSON.parse(localStorage.getItem('kmitl_pay_submissions')) || [
 document.addEventListener('DOMContentLoaded', async () => {
   setupDragAndDrop();
   checkGasConfigAlert();
+  fetchFeeItemsFromGas();
   
-  // If opening admin.html page, immediately render admin view
+  // If opening admin.html page, immediately check admin PIN authentication
   if (window.location.pathname.toLowerCase().includes('admin.html')) {
     currentView = 'admin';
-    renderAdminDashboard();
+    const isAuthed = checkAdminAuth();
+    if (isAuthed) {
+      renderAdminDashboard();
+    }
     return;
   }
 
@@ -100,6 +105,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     checkSavedSession();
   }
 });
+
+async function fetchFeeItemsFromGas() {
+  if (!CONFIG.GOOGLE_SCRIPT_URL) return;
+  try {
+    const response = await fetch(`${CONFIG.GOOGLE_SCRIPT_URL}?action=getFeeItems`);
+    const result = await response.json();
+    if (result && result.status === 'success' && Array.isArray(result.data) && result.data.length > 0) {
+      feeItems = result.data;
+      localStorage.setItem('kmitl_pay_fee_items', JSON.stringify(feeItems));
+      renderStudentDashboard();
+      if (currentView === 'admin') renderAdminDashboard();
+    }
+  } catch (err) {
+    console.warn('Fetch fee items error:', err);
+  }
+}
 
 async function checkLiffAutoLogin() {
   if (CONFIG.LIFF_ID && typeof liff !== 'undefined') {
@@ -1028,6 +1049,38 @@ function updateStatus(subId, newStatus) {
   }
 }
 
+// ==========================================
+// ADMIN PASSCODE & AUTHENTICATION
+// ==========================================
+function checkAdminAuth() {
+  const pinModal = document.getElementById('adminPinModal');
+  if (sessionStorage.getItem('kmitl_pay_admin_auth') === 'true') {
+    if (pinModal) pinModal.classList.remove('active');
+    return true;
+  } else {
+    if (pinModal) pinModal.classList.add('active');
+    return false;
+  }
+}
+
+function handleAdminPinSubmit(e) {
+  e.preventDefault();
+  const inputPin = document.getElementById('adminPinInput').value.trim();
+  const correctPin = CONFIG.ADMIN_PIN || '1234';
+
+  if (inputPin === correctPin) {
+    sessionStorage.setItem('kmitl_pay_admin_auth', 'true');
+    const pinModal = document.getElementById('adminPinModal');
+    if (pinModal) pinModal.classList.remove('active');
+    currentView = 'admin';
+    renderAdminDashboard();
+    showToast('เข้าสู่แผงเหรัญญิกเรียบร้อยแล้ว!', 'success');
+  } else {
+    showToast('รหัสผ่านเหรัญญิกไม่ถูกต้อง (ลอง 1234)', 'error');
+    document.getElementById('adminPinInput').value = '';
+  }
+}
+
 function openCreateFeeModal() {
   document.getElementById('createFeeModal').classList.add('active');
 }
@@ -1049,14 +1102,27 @@ function handleCreateFeeSubmit(e) {
     dueDate: dueDate
   };
 
-  // Push and persist to LocalStorage
+  // Push and persist to local array
   feeItems.push(newFee);
   saveFeeItemsToStorage();
+
+  // Sync to Google Sheet
+  if (CONFIG.GOOGLE_SCRIPT_URL) {
+    try {
+      fetch(CONFIG.GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'saveFeeItem', feeItem: newFee })
+      });
+    } catch (err) {
+      console.warn('Sync fee item POST error:', err);
+    }
+  }
 
   closeModal('createFeeModal');
   showToast('เพิ่มรายการเก็บเงินใหม่เรียบร้อยแล้ว!', 'success');
   
-  if (currentView === 'student') renderStudentDashboard();
+  renderStudentDashboard();
   if (currentView === 'admin') renderAdminDashboard();
 }
 
@@ -1064,20 +1130,37 @@ function deleteFeeItem(feeId) {
   if (confirm('คุณต้องการลบรายการเก็บเงินนี้ใช่หรือไม่?')) {
     feeItems = feeItems.filter(f => f.id !== feeId);
     saveFeeItemsToStorage();
+
+    // Sync deletion to Google Sheet
+    if (CONFIG.GOOGLE_SCRIPT_URL) {
+      try {
+        fetch(CONFIG.GOOGLE_SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'deleteFeeItem', feeId: feeId })
+        });
+      } catch (err) {
+        console.warn('Delete fee item POST error:', err);
+      }
+    }
+
     renderAdminDashboard();
+    renderStudentDashboard();
     showToast('ลบรายการเก็บเงินเรียบร้อยแล้ว', 'info');
   }
 }
 
 // ==========================================
-// CONFIGURATION MODAL (Google Apps Script URL & PromptPay)
+// CONFIGURATION MODAL (Google Apps Script URL & PromptPay & PIN)
 // ==========================================
 function openConfigModal() {
   document.getElementById('cfgScriptUrl').value = CONFIG.GOOGLE_SCRIPT_URL || '';
   document.getElementById('cfgLineChannelId').value = CONFIG.LINE_CHANNEL_ID || '';
+  if (document.getElementById('cfgLiffId')) document.getElementById('cfgLiffId').value = CONFIG.LIFF_ID || '';
   document.getElementById('cfgLineChannelSecret').value = CONFIG.LINE_CHANNEL_SECRET || '';
   document.getElementById('cfgPromptPay').value = CONFIG.PROMPTPAY_NUMBER || '';
   document.getElementById('cfgPromptPayName').value = CONFIG.PROMPTPAY_NAME || '';
+  if (document.getElementById('cfgAdminPin')) document.getElementById('cfgAdminPin').value = CONFIG.ADMIN_PIN || '1234';
   document.getElementById('configModal').classList.add('active');
 }
 
@@ -1085,9 +1168,11 @@ function handleSaveConfig(e) {
   e.preventDefault();
   CONFIG.GOOGLE_SCRIPT_URL = document.getElementById('cfgScriptUrl').value.trim();
   CONFIG.LINE_CHANNEL_ID = document.getElementById('cfgLineChannelId').value.trim();
+  if (document.getElementById('cfgLiffId')) CONFIG.LIFF_ID = document.getElementById('cfgLiffId').value.trim();
   CONFIG.LINE_CHANNEL_SECRET = document.getElementById('cfgLineChannelSecret').value.trim();
   CONFIG.PROMPTPAY_NUMBER = document.getElementById('cfgPromptPay').value.trim();
   CONFIG.PROMPTPAY_NAME = document.getElementById('cfgPromptPayName').value.trim();
+  if (document.getElementById('cfgAdminPin')) CONFIG.ADMIN_PIN = document.getElementById('cfgAdminPin').value.trim();
 
   saveConfigToStorage();
   closeModal('configModal');
