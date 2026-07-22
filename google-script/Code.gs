@@ -890,3 +890,21 @@ function getStudentLineUserId(studentId) {
   }
   return null;
 }
+
+function notifyPaymentSuccess(studentId, feeName) {
+  try {
+    const studentLineId = getStudentLineUserId(studentId);
+    if (studentLineId) {
+      const pushMsg = `📢 แจ้งเตือนสถานะการชำระเงิน\n📚 รายการ: ${feeName}\nสถานะ: ✅ อนุมัติเรียบร้อยแล้ว`;
+      sendLinePushMessage(studentLineId, pushMsg);
+      Logger.log("Notification sent successfully to: " + studentId);
+      return { status: 'success', message: 'ส่งแจ้งเตือนสำเร็จ' };
+    } else {
+      Logger.log("Student LINE ID not found for ID: " + studentId);
+      return { status: 'error', message: 'ไม่พบ LINE ID ของผู้ใช้ในชีต' };
+    }
+  } catch (e) {
+    Logger.log("notifyPaymentSuccess failed: " + e.toString());
+    return { status: 'error', message: e.toString() };
+  }
+}
