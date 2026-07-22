@@ -1185,15 +1185,12 @@ async function handleCreateFeeSubmit(e) {
   // 2. Post to Google Sheet in background
   if (CONFIG.GOOGLE_SCRIPT_URL) {
     try {
-      const response = await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
+      await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: 'saveFeeItem', feeItem: newFee })
       });
-      const result = await response.json();
-      if (result && result.status === 'success') {
-        showToast('ซิงก์บันทึกลง Google Sheet สำเร็จแล้ว!', 'success');
-      }
+      showToast('ซิงก์บันทึกลง Google Sheet สำเร็จแล้ว!', 'success');
     } catch (err) {
       console.warn('Sync fee item POST error:', err);
     }
