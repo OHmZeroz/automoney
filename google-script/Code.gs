@@ -260,6 +260,7 @@ function fetchLineUserProfile(accessToken) {
  * Find student info by linked LINE User ID
  */
 function findStudentByLineUserId(lineUserId) {
+  if (!lineUserId) return null;
   const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   const sheet = getStudentSheet(ss);
   if (!sheet) return null;
@@ -273,8 +274,13 @@ function findStudentByLineUserId(lineUserId) {
 
   if (lineColIdx === -1) return null;
 
+  const cleanTargetLineId = lineUserId.toString().trim().toLowerCase();
+
   for (let i = 1; i < data.length; i++) {
-    if (data[i][lineColIdx] && data[i][lineColIdx].toString().trim() === lineUserId.trim()) {
+    if (!data[i][lineColIdx]) continue;
+    const cleanCellLineId = data[i][lineColIdx].toString().trim().toLowerCase();
+    
+    if (cleanCellLineId === cleanTargetLineId) {
       return {
         studentId: idColIdx !== -1 ? data[i][idColIdx].toString().trim() : '',
         name: nameColIdx !== -1 ? data[i][nameColIdx].toString().trim() : 'นักศึกษา KMITL'
@@ -284,9 +290,6 @@ function findStudentByLineUserId(lineUserId) {
   return null;
 }
 
-/**
- * Link LINE User ID to official Student ID inside Sheet
- */
 /**
  * Link LINE User ID to official Student ID inside Sheet
  */
@@ -324,12 +327,13 @@ function linkLineIdToStudent(lineUserId, studentId) {
       const existingLineId = data[i][lineColIdx] ? data[i][lineColIdx].toString().trim() : '';
 
       // Check if already linked to a different LINE ID
-      if (existingLineId && existingLineId !== lineUserId.trim()) {
+      if (existingLineId && existingLineId.toLowerCase() !== lineUserId.trim().toLowerCase()) {
         return { status: 'error', message: 'รหัสนักศึกษานี้ถูกลงทะเบียนโดยบัญชี LINE อื่นไปแล้ว' };
       }
 
-      // Link LINE User ID in sheet cell
+      // Link LINE User ID in sheet cell and flush immediately
       sheet.getRange(i + 1, lineColIdx + 1).setValue(lineUserId.trim());
+      SpreadsheetApp.flush();
       
       const studentName = nameColIdx !== -1 ? data[i][nameColIdx].toString().trim() : 'นักศึกษา KMITL';
       return {
