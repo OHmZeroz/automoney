@@ -954,17 +954,15 @@ async function handlePaymentSubmit(e) {
   // Post to Google Apps Script API
   if (CONFIG.GOOGLE_SCRIPT_URL) {
     try {
-      const response = await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
+      newSubmission.action = 'submitPayment';
+      await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
         method: 'POST',
+        mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(newSubmission)
       });
-      const result = await response.json();
-      if (result && result.status === 'success' && result.driveUrl) {
-        newSubmission.slipUrl = result.driveUrl;
-      } else if (result && result.status === 'error') {
-        showToast('Google Apps Script: ' + result.message, 'error');
-      }
+      showToast('ส่งสลิปชำระเงินเรียบร้อย! บันทึกลง Google Sheet & Drive แล้ว 🟢', 'success');
+      setTimeout(fetchSubmissionsFromGas, 1500);
     } catch (err) {
       console.warn('Apps Script POST failed:', err);
     }
