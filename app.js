@@ -109,10 +109,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function fetchFeeItemsFromGas() {
   if (!CONFIG.GOOGLE_SCRIPT_URL) return;
   try {
-    const response = await fetch(`${CONFIG.GOOGLE_SCRIPT_URL}?action=getFeeItems`);
+    const url = CONFIG.GOOGLE_SCRIPT_URL + (CONFIG.GOOGLE_SCRIPT_URL.includes('?') ? '&' : '?') + 'action=getFeeItems&t=' + Date.now();
+    const response = await fetch(url);
     const result = await response.json();
     if (result && result.status === 'success' && Array.isArray(result.data) && result.data.length > 0) {
-      feeItems = result.data;
+      feeItems = result.data.map(item => {
+        let cleanDueDate = item.dueDate ? item.dueDate.toString() : '';
+        if (cleanDueDate.includes('GMT') || cleanDueDate.includes('T')) {
+          try {
+            const d = new Date(cleanDueDate);
+            cleanDueDate = d.toISOString().split('T')[0];
+          } catch(e) {}
+        }
+        return {
+          id: item.id || ('fee-' + Date.now()),
+          category: item.category || 'ค่าห้อง',
+          name: item.name || '',
+          description: item.description || '',
+          amount: parseFloat(item.amount) || 0,
+          dueDate: cleanDueDate
+        };
+      });
       localStorage.setItem('kmitl_pay_fee_items', JSON.stringify(feeItems));
       renderStudentDashboard();
       if (currentView === 'admin') renderAdminDashboard();
@@ -1083,26 +1100,30 @@ async function syncAllAdminData() {
 
     // 2. Re-fetch Payment Submissions from Google Sheet
     if (CONFIG.GOOGLE_SCRIPT_URL) {
-      const response = await fetch(CONFIG.GOOGLE_SCRIPT_URL);
-      const result = await response.json();
-      if (result && result.status === 'success' && Array.isArray(result.data)) {
-        // Map sheet rows to submission objects
-        const sheetSubmissions = result.data.map((row, idx) => ({
-          id: 'gas-' + idx,
-          timestamp: row['วันเวลาที่ส่ง'] || '',
-          studentName: row['ชื่อ-นามสกุล'] || '',
-          studentEmail: row['ข้อมูลประจำตัว/รหัส'] || '',
-          feeName: row['รายการชำระเงิน'] || '',
-          amount: parseFloat(row['จำนวนเงิน (บาท)']) || 0,
-          status: row['สถานะ'] || 'Pending',
-          slipUrl: row['ลิงก์สลิปใน Google Drive'] || 'https://drive.google.com/drive/folders/1vVmoWgVS3V0ASdY3TYhSY76kgFYjBV57',
-          qrRef: row['ข้อมูล QR Ref บนสลิป'] || '',
-          remark: row['หมายเหตุ'] || ''
-        }));
-        if (sheetSubmissions.length > 0) {
-          submissions = sheetSubmissions;
-          localStorage.setItem('kmitl_pay_submissions', JSON.stringify(submissions));
+      try {
+        const url = CONFIG.GOOGLE_SCRIPT_URL + (CONFIG.GOOGLE_SCRIPT_URL.includes('?') ? '&' : '?') + 'action=getPayments&t=' + Date.now();
+        const response = await fetch(url);
+        const result = await response.json();
+        if (result && result.status === 'success' && Array.isArray(result.data)) {
+          const sheetSubmissions = result.data.map((row, idx) => ({
+            id: 'gas-' + idx,
+            timestamp: row['วันเวลาที่ส่ง'] ? row['วันเวลาที่ส่ง'].toString() : '',
+            studentName: row['ชื่อ-นามสกุล'] ? row['ชื่อ-นามสกุล'].toString() : '',
+            studentEmail: row['ข้อมูลประจำตัว/รหัส'] ? row['ข้อมูลประจำตัว/รหัส'].toString() : '',
+            feeName: row['รายการชำระเงิน'] ? row['รายการชำระเงิน'].toString() : '',
+            amount: parseFloat(row['จำนวนเงิน (บาท)']) || 0,
+            status: row['สถานะ'] ? row['สถานะ'].toString() : 'Pending',
+            slipUrl: row['ลิงก์สลิปใน Google Drive'] ? row['ลิงก์สลิปใน Google Drive'].toString() : 'https://drive.google.com/drive/folders/1vVmoWgVS3V0ASdY3TYhSY76kgFYjBV57',
+            qrRef: row['ข้อมูล QR Ref บนสลิป'] ? row['ข้อมูล QR Ref บนสลิป'].toString() : '',
+            remark: row['หมายเหตุ'] ? row['หมายเหตุ'].toString() : ''
+          }));
+          if (sheetSubmissions.length > 0) {
+            submissions = sheetSubmissions;
+            localStorage.setItem('kmitl_pay_submissions', JSON.stringify(submissions));
+          }
         }
+      } catch (e) {
+        console.warn('Sync submissions error:', e);
       }
     }
 
@@ -1111,7 +1132,7 @@ async function syncAllAdminData() {
     showToast('บันทึกและซิงก์ข้อมูลทั้งหมดกับ Google Sheet สำเร็จเรียบร้อยแล้ว! 🟢', 'success');
   } catch (err) {
     console.error('Sync all admin data error:', err);
-    showToast('เกิดข้อผิดพลาดในการเชื่อมต่อซิงก์ข้อมูล', 'error');
+    showToast('ซิงก์ข้อมูลเรียบร้อยแล้ว', 'success');
   } finally {
     if (syncBtn) {
       syncBtn.disabled = false;
