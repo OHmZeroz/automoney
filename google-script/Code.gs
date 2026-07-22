@@ -197,17 +197,16 @@ function doPost(e) {
  */
 function exchangeLineCodeForToken(code, redirectUri, channelId, channelSecret) {
   const url = 'https://api.line.me/oauth2/v2.1/token';
-  const payload = {
-    grant_type: 'authorization_code',
-    code: code,
-    redirect_uri: redirectUri,
-    client_id: channelId,
-    client_secret: channelSecret
-  };
+  const body = 'grant_type=authorization_code'
+    + '&code=' + encodeURIComponent(code)
+    + '&redirect_uri=' + encodeURIComponent(redirectUri)
+    + '&client_id=' + encodeURIComponent(channelId)
+    + '&client_secret=' + encodeURIComponent(channelSecret);
   
   const options = {
     method: 'post',
-    payload: payload,
+    contentType: 'application/x-www-form-urlencoded',
+    payload: body,
     muteHttpExceptions: true
   };
 

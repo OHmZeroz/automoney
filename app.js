@@ -208,6 +208,14 @@ function checkLineAuthCode() {
   }
 }
 
+function getRedirectUri() {
+  let uri = window.location.origin + window.location.pathname;
+  if (uri.length > 1 && uri.endsWith('/')) {
+    uri = uri.slice(0, -1);
+  }
+  return uri;
+}
+
 // ==========================================
 // LINE LOGIN & BYPASS LOGIN LOGIC
 // ==========================================
@@ -217,7 +225,7 @@ function loginWithLine() {
     return;
   }
   
-  const redirectUri = encodeURIComponent(window.location.origin + window.location.pathname);
+  const redirectUri = encodeURIComponent(getRedirectUri());
   const state = 'state-' + Date.now();
   const authUrl = `https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=${CONFIG.LINE_CHANNEL_ID}&redirect_uri=${redirectUri}&state=${state}&scope=profile%20openid`;
   
@@ -282,7 +290,7 @@ async function processLineLogin(code) {
   showToast('กำลังเข้าสู่ระบบผ่าน LINE...', 'info');
 
   try {
-    const redirectUri = window.location.origin + window.location.pathname;
+    const redirectUri = getRedirectUri();
     const url = `${CONFIG.GOOGLE_SCRIPT_URL}?action=lineLogin&code=${code}&redirect_uri=${encodeURIComponent(redirectUri)}&channelId=${CONFIG.LINE_CHANNEL_ID}&channelSecret=${CONFIG.LINE_CHANNEL_SECRET}`;
     
     const response = await fetch(url);
