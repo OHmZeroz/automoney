@@ -167,7 +167,21 @@ function doGet(e) {
  */
 function doPost(e) {
   try {
-    const contents = e.postData ? JSON.parse(e.postData.contents) : {};
+    let contents = {};
+    if (e && e.postData && e.postData.contents) {
+      if (typeof e.postData.contents === 'string') {
+        try {
+          contents = JSON.parse(e.postData.contents);
+        } catch (err) {
+          contents = (e && e.parameter) ? e.parameter : {};
+        }
+      } else if (typeof e.postData.contents === 'object') {
+        contents = e.postData.contents;
+      }
+    } else if (e && e.parameter) {
+      contents = e.parameter;
+    }
+
     const action = contents.action;
 
     // --- Action 1: Link LINE User ID to Student ID in Sheet ---
