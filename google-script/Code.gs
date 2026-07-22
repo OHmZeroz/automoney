@@ -637,11 +637,18 @@ function updatePaymentStatusInSheet(studentId, feeName, status) {
   if (!sheet) return { status: 'error', message: 'ไม่พบชีตรายการชำระเงิน' };
   
   const data = sheet.getDataRange().getValues();
+  
+  const cleanSearchId = studentId ? studentId.toString().split('.')[0].replace(/[^0-9a-zA-Z]/g, '').trim().toLowerCase() : '';
+  const cleanSearchFee = feeName ? feeName.toString().replace(/\s+/g, '').trim().toLowerCase() : '';
+
   for (let i = 1; i < data.length; i++) {
     const rowId = data[i][2] ? data[i][2].toString().trim() : '';
     const rowFee = data[i][3] ? data[i][3].toString().trim() : '';
     
-    if ((!studentId || rowId === studentId.toString().trim()) && (!feeName || rowFee === feeName.toString().trim())) {
+    const cleanRowId = rowId.split('.')[0].replace(/[^0-9a-zA-Z]/g, '').trim().toLowerCase();
+    const cleanRowFee = rowFee.replace(/\s+/g, '').trim().toLowerCase();
+    
+    if ((!cleanSearchId || cleanRowId === cleanSearchId) && (!cleanSearchFee || cleanRowFee === cleanSearchFee)) {
       sheet.getRange(i + 1, 6).setValue(status);
       SpreadsheetApp.flush();
       return { status: 'success', message: 'อัปเดตสถานะเป็น ' + status + ' เรียบร้อยแล้ว' };
