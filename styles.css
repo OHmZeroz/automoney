@@ -934,3 +934,87 @@ body {
     overflow-x: auto;
   }
 }
+
+/* ==========================================
+   QUANTITY SELECTOR (Payment Modal)
+   ========================================== */
+.quantity-selector-wrapper {
+  background: rgba(255, 107, 0, 0.06);
+  border: 1px solid rgba(255, 107, 0, 0.18);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.2rem;
+  margin: 1rem 0;
+}
+
+.quantity-selector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin: 0.5rem 0;
+}
+
+.qty-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--kmitl-orange);
+  background: rgba(255, 107, 0, 0.1);
+  color: var(--kmitl-orange);
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.qty-btn:hover:not(:disabled) {
+  background: var(--kmitl-orange);
+  color: #fff;
+  box-shadow: 0 0 16px rgba(255, 107, 0, 0.4);
+  transform: scale(1.08);
+}
+
+.qty-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  border-color: var(--text-muted);
+  color: var(--text-muted);
+}
+
+.qty-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 64px;
+}
+
+.qty-value {
+  font-family: 'Outfit', sans-serif;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--kmitl-orange);
+  line-height: 1;
+}
+
+.qty-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.qty-summary {
+  text-align: center;
+  padding-top: 0.6rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: 0.6rem;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.qty-summary strong {
+  color: var(--kmitl-gold);
+  font-size: 1.15rem;
+  font-weight: 700;
+}

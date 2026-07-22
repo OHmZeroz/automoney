@@ -272,6 +272,29 @@
         <div class="qr-receiver" id="modalPromptPayReceiver">ชื่อบัญชี: เหรัญญิกห้อง KMITL (PromptPay: 0891234567)</div>
       </div>
 
+      <!-- Quantity Selector -->
+      <div class="quantity-selector-wrapper" id="quantitySelectorWrapper">
+        <label class="form-label" style="margin-bottom: 0.5rem; font-weight: 600;">
+          <i class="fa-solid fa-calculator" style="margin-right: 6px; color: var(--color-primary);"></i>เลือกจำนวนที่ต้องการชำระ
+        </label>
+        <div class="quantity-selector">
+          <button type="button" class="qty-btn" id="qtyMinus" onclick="changePaymentQty(-1)">
+            <i class="fa-solid fa-minus"></i>
+          </button>
+          <div class="qty-display">
+            <span class="qty-value" id="qtyValue">1</span>
+            <span class="qty-label">จำนวน</span>
+          </div>
+          <button type="button" class="qty-btn" id="qtyPlus" onclick="changePaymentQty(1)">
+            <i class="fa-solid fa-plus"></i>
+          </button>
+        </div>
+        <div class="qty-summary" id="qtySummary">
+          <span id="qtySummaryText">฿100.00 × 1 = </span>
+          <strong id="qtySummaryTotal">฿100.00</strong>
+        </div>
+      </div>
+
       <form id="paymentForm" onsubmit="handlePaymentSubmit(event)">
         <!-- File Dropzone -->
         <div class="form-group">

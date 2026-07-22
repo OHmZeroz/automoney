@@ -776,26 +776,58 @@ function crc16(data) {
 // ==========================================
 // PAYMENT MODAL & PROMPTPAY QR RENDER
 // ==========================================
+let currentPaymentQty = 1;
+
 function openPaymentModal(feeId) {
   selectedFeeItem = feeItems.find(f => f.id === feeId);
   if (!selectedFeeItem) return;
 
+  // Reset quantity to 1
+  currentPaymentQty = 1;
+
   document.getElementById('modalFeeTitle').textContent = `ชำระเงิน: ${selectedFeeItem.name}`;
-  document.getElementById('modalPromptPayAmount').textContent = `฿${selectedFeeItem.amount.toFixed(2)}`;
   document.getElementById('modalPromptPayReceiver').textContent = `ชื่อบัญชี: ${CONFIG.PROMPTPAY_NAME} (PromptPay: ${maskPromptPay(CONFIG.PROMPTPAY_NUMBER)})`;
 
   resetSlipUploader();
+  updatePaymentQR();
 
-  const payload = generatePromptPayQRPayload(CONFIG.PROMPTPAY_NUMBER, selectedFeeItem.amount);
-  
-  // Set Image QR Code API fallback immediately
+  document.getElementById('paymentModal').classList.add('active');
+}
+
+function changePaymentQty(delta) {
+  const newQty = currentPaymentQty + delta;
+  if (newQty < 1 || newQty > 10) return;
+  currentPaymentQty = newQty;
+  updatePaymentQR();
+}
+
+function updatePaymentQR() {
+  if (!selectedFeeItem) return;
+
+  const unitPrice = selectedFeeItem.amount;
+  const totalAmount = unitPrice * currentPaymentQty;
+
+  // Update quantity display
+  document.getElementById('qtyValue').textContent = currentPaymentQty;
+  document.getElementById('qtyMinus').disabled = (currentPaymentQty <= 1);
+  document.getElementById('qtyPlus').disabled = (currentPaymentQty >= 10);
+
+  // Update summary text
+  document.getElementById('qtySummaryText').textContent = `฿${unitPrice.toLocaleString(undefined, {minimumFractionDigits: 2})} × ${currentPaymentQty} = `;
+  document.getElementById('qtySummaryTotal').textContent = `฿${totalAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+
+  // Update displayed amount
+  document.getElementById('modalPromptPayAmount').textContent = `฿${totalAmount.toFixed(2)}`;
+
+  // Regenerate QR Code with new total
+  const payload = generatePromptPayQRPayload(CONFIG.PROMPTPAY_NUMBER, totalAmount);
+
   const qrImg = document.getElementById('qrImg');
   if (qrImg) {
     qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(payload)}`;
     qrImg.style.display = 'block';
   }
 
-  // Render to canvas if QRCode library is available
   const qrCanvas = document.getElementById('qrCanvas');
   if (typeof QRCode !== 'undefined' && qrCanvas) {
     QRCode.toCanvas(qrCanvas, payload, { width: 220, margin: 2 }, function (error) {
@@ -805,8 +837,6 @@ function openPaymentModal(feeId) {
       }
     });
   }
-
-  document.getElementById('paymentModal').classList.add('active');
 }
 
 function closeModal(modalId) {
@@ -958,7 +988,7 @@ async function handlePaymentSubmit(e) {
     studentEmail: studentId,
     feeId: selectedFeeItem ? selectedFeeItem.id : 'fee-101',
     feeName: selectedFeeItem ? selectedFeeItem.name : 'ค่าห้องประจำเดือน',
-    amount: selectedFeeItem ? selectedFeeItem.amount : 100,
+    amount: selectedFeeItem ? selectedFeeItem.amount * currentPaymentQty : 100,
     status: 'Pending',
     timestamp: new Date().toLocaleString('th-TH'),
     slipUrl: 'https://drive.google.com/drive/folders/1vVmoWgVS3V0ASdY3TYhSY76kgFYjBV57',
@@ -980,8 +1010,7 @@ async function handlePaymentSubmit(e) {
     }
   }
 
-  // Update Local Submissions Array
-  submissions = submissions.filter(s => !(s.feeId === newSubmission.feeId && (s.studentId === studentId || s.studentEmail === studentId)));
+  // Update Local Submissions Array (append, don't replace — supports cumulative payments)
   submissions.unshift(newSubmission);
   localStorage.setItem('kmitl_pay_submissions', JSON.stringify(submissions));
 
