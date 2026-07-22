@@ -614,13 +614,20 @@ function saveFeeItemToSheet(item) {
 }
 
 function deleteFeeItemFromSheet(feeId) {
+  if (!feeId) return { status: 'error', message: 'ไม่พบ feeId' };
   const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   const sheet = ss.getSheetByName('รายการเก็บเงิน');
   if (!sheet) return { status: 'error', message: 'ไม่พบชีตรายการเก็บเงิน' };
   
   const data = sheet.getDataRange().getValues();
+  const cleanTargetId = feeId.toString().trim().toLowerCase();
+
   for (let i = 1; i < data.length; i++) {
-    if (data[i][0] && data[i][0].toString() === feeId.toString()) {
+    const rowId = data[i][0] ? data[i][0].toString().trim().toLowerCase() : '';
+    const rowName = data[i][2] ? data[i][2].toString().trim().toLowerCase() : '';
+
+    // Match by ID OR match by Item Name
+    if ((rowId && rowId === cleanTargetId) || (rowName && rowName === cleanTargetId)) {
       sheet.deleteRow(i + 1);
       SpreadsheetApp.flush();
       return { status: 'success', message: 'ลบรายการเก็บเงินเรียบร้อยแล้ว' };

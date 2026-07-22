@@ -1193,7 +1193,10 @@ async function handleCreateFeeSubmit(e) {
 }
 
 async function deleteFeeItem(feeId) {
-  if (confirm('คุณต้องการลบรายการเก็บเงินนี้ใช่หรือไม่?')) {
+  const targetItem = feeItems.find(f => f.id === feeId);
+  const itemName = targetItem ? targetItem.name : '';
+
+  if (confirm(`คุณต้องการลบรายการ "${itemName || 'นี้'}" ใช่หรือไม่?`)) {
     feeItems = feeItems.filter(f => f.id !== feeId);
     saveFeeItemsToStorage();
 
@@ -1207,9 +1210,9 @@ async function deleteFeeItem(feeId) {
         await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'deleteFeeItem', feeId: feeId })
+          body: JSON.stringify({ action: 'deleteFeeItem', feeId: feeId, feeName: itemName })
         });
-        showToast('ลบรายการเก็บเงินเรียบร้อยแล้ว', 'info');
+        showToast('ลบรายการเก็บเงินเรียบร้อยแล้ว!', 'success');
         fetchFeeItemsFromGas();
       } catch (err) {
         console.warn('Delete fee item POST error:', err);
