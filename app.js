@@ -1167,25 +1167,33 @@ async function handleCreateFeeSubmit(e) {
     dueDate: dueDate
   };
 
-  // Push to local array for instant UI feedback
+  // 1. Add to local feeItems array and render immediately
   feeItems.push(newFee);
   saveFeeItemsToStorage();
   closeModal('createFeeModal');
-  showToast('กำลังบันทึกรายการลง Google Sheet...', 'info');
+
+  // Reset form inputs
+  document.getElementById('newFeeCategory').value = '';
+  document.getElementById('newFeeName').value = '';
+  document.getElementById('newFeeDesc').value = '';
+  document.getElementById('newFeeAmount').value = '';
 
   renderStudentDashboard();
   renderAdminDashboard();
+  showToast('เพิ่มรายการเก็บเงินใหม่เรียบร้อยแล้ว!', 'success');
 
-  // Sync to Google Sheet
+  // 2. Post to Google Sheet in background
   if (CONFIG.GOOGLE_SCRIPT_URL) {
     try {
-      await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
+      const response = await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: 'saveFeeItem', feeItem: newFee })
       });
-      showToast('สร้างและซิงก์รายการเก็บเงินใหม่เรียบร้อยแล้ว!', 'success');
-      fetchFeeItemsFromGas();
+      const result = await response.json();
+      if (result && result.status === 'success') {
+        showToast('ซิงก์บันทึกลง Google Sheet สำเร็จแล้ว!', 'success');
+      }
     } catch (err) {
       console.warn('Sync fee item POST error:', err);
     }
