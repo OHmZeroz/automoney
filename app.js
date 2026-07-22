@@ -284,9 +284,9 @@ function checkSavedSession() {
 // ==========================================
 // AUTHENTICATION & LOGIN LOGIC
 // ==========================================
-// Check if URL has LINE auth code on startup
 document.addEventListener('DOMContentLoaded', () => {
   checkLineAuthCode();
+  fetchSystemConfigFromGas();
 });
 
 function checkLineAuthCode() {
@@ -551,6 +551,8 @@ function logoutUser() {
   document.getElementById('registerSection').style.display = 'none';
   document.getElementById('mainAppSection').style.display = 'none';
   document.getElementById('navControls').style.display = 'none';
+  const navAdminLink = document.getElementById('navAdminLink');
+  if (navAdminLink) navAdminLink.style.display = 'none';
   showToast('ออกจากระบบเรียบร้อยแล้ว', 'info');
 }
 
@@ -582,6 +584,15 @@ function showMainApplication(user) {
 
   const navCtrl = document.getElementById('navControls');
   if (navCtrl) navCtrl.style.display = 'flex';
+
+  const navAdminLink = document.getElementById('navAdminLink');
+  if (navAdminLink) {
+    if (user.studentId && user.studentId.toString().trim() === '69010115') {
+      navAdminLink.style.display = 'inline-flex';
+    } else {
+      navAdminLink.style.display = 'none';
+    }
+  }
 
   renderStudentDashboard();
 }
@@ -772,7 +783,7 @@ function openPaymentModal(feeId) {
 
   document.getElementById('modalFeeTitle').textContent = `ชำระเงิน: ${selectedFeeItem.name}`;
   document.getElementById('modalPromptPayAmount').textContent = `฿${selectedFeeItem.amount.toFixed(2)}`;
-  document.getElementById('modalPromptPayReceiver').textContent = `ชื่อบัญชี: ${CONFIG.PROMPTPAY_NAME} (PromptPay: ${CONFIG.PROMPTPAY_NUMBER})`;
+  document.getElementById('modalPromptPayReceiver').textContent = `ชื่อบัญชี: ${CONFIG.PROMPTPAY_NAME} (PromptPay: ${maskPromptPay(CONFIG.PROMPTPAY_NUMBER)})`;
 
   resetSlipUploader();
 
@@ -1255,7 +1266,7 @@ function openConfigModal() {
   document.getElementById('configModal').classList.add('active');
 }
 
-function handleSaveConfig(e) {
+async function handleSaveConfig(e) {
   e.preventDefault();
   CONFIG.GOOGLE_SCRIPT_URL = document.getElementById('cfgScriptUrl').value.trim();
   CONFIG.LINE_CHANNEL_ID = document.getElementById('cfgLineChannelId').value.trim();
@@ -1266,6 +1277,56 @@ function handleSaveConfig(e) {
   saveConfigToStorage();
   closeModal('configModal');
   showToast('บันทึกการตั้งค่าเชื่อมต่อ LINE & Google เรียบร้อยแล้ว!', 'success');
+
+  // Sync settings to Google Sheets config sheet
+  if (CONFIG.GOOGLE_SCRIPT_URL) {
+    try {
+      await postToGasReliable({
+        action: 'saveSystemConfig',
+        settings: {
+          PROMPTPAY_NUMBER: CONFIG.PROMPTPAY_NUMBER,
+          PROMPTPAY_NAME: CONFIG.PROMPTPAY_NAME
+        }
+      });
+      showToast('ซิงก์ข้อมูลตั้งค่าลง Google Sheet สำเร็จ! 🟢', 'success');
+    } catch (err) {
+      console.warn('Sync config to GAS error:', err);
+    }
+  }
+}
+
+async function fetchSystemConfigFromGas() {
+  if (!CONFIG.GOOGLE_SCRIPT_URL) return;
+  try {
+    const url = CONFIG.GOOGLE_SCRIPT_URL + (CONFIG.GOOGLE_SCRIPT_URL.includes('?') ? '&' : '?') + 'action=getSystemConfig&t=' + Date.now();
+    const response = await fetch(url);
+    const result = await response.json();
+    if (result && result.status === 'success' && result.data) {
+      const data = result.data;
+      if (data.PROMPTPAY_NUMBER) {
+        CONFIG.PROMPTPAY_NUMBER = data.PROMPTPAY_NUMBER;
+      }
+      if (data.PROMPTPAY_NAME) {
+        CONFIG.PROMPTPAY_NAME = data.PROMPTPAY_NAME;
+      }
+      localStorage.setItem('kmitl_pay_config', JSON.stringify(CONFIG));
+    }
+  } catch (err) {
+    console.warn('Fetch system config error:', err);
+  }
+}
+
+function maskPromptPay(number) {
+  if (!number) return '';
+  const str = number.toString().trim();
+  if (str.length === 10) {
+    // Mobile number: 089-xxx-4567
+    return str.substring(0, 3) + '-xxx-' + str.substring(6);
+  } else if (str.length === 13) {
+    // National ID: 1-23xx-xxxx-xx-x
+    return str.substring(0, 4) + '-xxxxx-xxx-' + str.substring(12);
+  }
+  return str.substring(0, Math.floor(str.length / 2)) + 'xxx';
 }
 
 // ==========================================

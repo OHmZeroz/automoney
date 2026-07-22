@@ -16,6 +16,23 @@
   <!-- QRCode & jsQR Libraries -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+
+  <script>
+    // Security check to restrict admin page access to 69010115 only
+    (function() {
+      const savedUser = localStorage.getItem('kmitl_pay_user');
+      if (savedUser) {
+        try {
+          const user = JSON.parse(savedUser);
+          if (user.studentId && user.studentId.toString().trim() === '69010115') {
+            return; // Authorized!
+          }
+        } catch (e) {}
+      }
+      alert('คุณไม่มีสิทธิ์เข้าถึงหน้านี้!');
+      window.location.href = 'index.html';
+    })();
+  </script>
 </head>
 <body>
 

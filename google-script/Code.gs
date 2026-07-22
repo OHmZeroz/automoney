@@ -52,6 +52,12 @@ function doGet(e) {
   try {
     const action = e.parameter.action;
 
+    // --- Action 0: Get settings config ---
+    if (action === 'getSystemConfig') {
+      const settings = getOrCreateSettingsSheet();
+      return createJsonResponse({ status: 'success', data: settings });
+    }
+
     // --- Action 1: LINE OAuth Token Exchange & Login Verification ---
     if (action === 'lineLogin') {
       const code = e.parameter.code;
@@ -211,6 +217,16 @@ function doPost(e) {
     Logger.log('doPost contents keys: ' + Object.keys(contents).join(', '));
 
     const action = contents.action;
+
+    // --- Action 0.5: Save settings config ---
+    if (action === 'saveSystemConfig') {
+      let settings = contents.settings;
+      if (typeof settings === 'string') {
+        try { settings = JSON.parse(settings); } catch(e) {}
+      }
+      const result = saveSystemConfigToSheet(settings);
+      return createJsonResponse(result);
+    }
 
     // --- Action 1: Link LINE User ID to Student ID in Sheet ---
     if (action === 'registerLineUser') {
@@ -797,4 +813,53 @@ function testAdminNotification() {
     return;
   }
   sendLinePushMessage(adminLineId, "ทดสอบส่งแจ้งเตือนจากระบบ KMITL Pay! 🟢");
+}
+
+function getOrCreateSettingsSheet() {
+  const ss = getSpreadsheet();
+  let sheet = ss.getSheetByName('ตั้งค่า');
+  if (!sheet) {
+    sheet = ss.insertSheet('ตั้งค่า');
+    sheet.appendRow(['Key', 'Value']);
+    sheet.appendRow(['PROMPTPAY_NUMBER', '0891234567']);
+    sheet.appendRow(['PROMPTPAY_NAME', 'เหรัญญิกประจำห้อง (KMITL Pay)']);
+    SpreadsheetApp.flush();
+  }
+  const data = sheet.getDataRange().getValues();
+  const settings = {};
+  for (let i = 1; i < data.length; i++) {
+    const key = data[i][0] ? data[i][0].toString().trim() : '';
+    const val = data[i][1] ? data[i][1].toString().trim() : '';
+    if (key) settings[key] = val;
+  }
+  return settings;
+}
+
+function saveSystemConfigToSheet(settings) {
+  if (!settings) return { status: 'error', message: 'ไม่มีข้อมูลการตั้งค่าส่งมา' };
+  const ss = getSpreadsheet();
+  let sheet = ss.getSheetByName('ตั้งค่า');
+  if (!sheet) {
+    sheet = ss.insertSheet('ตั้งค่า');
+    sheet.appendRow(['Key', 'Value']);
+  }
+  
+  const keys = Object.keys(settings);
+  keys.forEach(key => {
+    const data = sheet.getDataRange().getValues();
+    let foundIdx = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] && data[i][0].toString().trim() === key) {
+        foundIdx = i;
+        break;
+      }
+    }
+    if (foundIdx !== -1) {
+      sheet.getRange(foundIdx + 1, 2).setValue(settings[key]);
+    } else {
+      sheet.appendRow([key, settings[key]]);
+    }
+  });
+  SpreadsheetApp.flush();
+  return { status: 'success', message: 'บันทึกการตั้งค่าระบบเรียบร้อยแล้ว' };
 }
