@@ -38,14 +38,15 @@ function authorizeExternalRequests() {
  */
 function doGet(e) {
   try {
-    const action = e.parameter.action;
+    const params = (e && e.parameter) ? e.parameter : {};
+    const action = params.action;
 
     // --- Action 1: LINE OAuth Token Exchange & Login Verification ---
     if (action === 'lineLogin') {
-      const code = e.parameter.code;
-      const redirectUri = e.parameter.redirect_uri;
-      const channelId = e.parameter.channelId;
-      const channelSecret = e.parameter.channelSecret;
+      const code = params.code;
+      const redirectUri = params.redirect_uri;
+      const channelId = params.channelId;
+      const channelSecret = params.channelSecret;
 
       if (!code || !channelId || !channelSecret) {
         return createJsonResponse({ status: 'error', message: 'ข้อมูลสำหรับ LINE Login ไม่ครบถ้วน (เช็คการตั้งค่าในแผงเหรัญญิก)' });
@@ -86,7 +87,7 @@ function doGet(e) {
 
     // --- Action 1.5: Check LINE User ID directly (for LINE LIFF) ---
     if (action === 'checkLineUser') {
-      const lineUserId = e.parameter.lineUserId;
+      const lineUserId = params.lineUserId;
       if (!lineUserId) {
         return createJsonResponse({ status: 'error', message: 'ไม่พบ lineUserId' });
       }
@@ -111,7 +112,7 @@ function doGet(e) {
 
     // --- Action 2: Direct Check Student ID (Bypass Login) ---
     if (action === 'checkStudentId') {
-      const studentId = e.parameter.studentId;
+      const studentId = params.studentId;
       const studentName = getStudentNameById(studentId);
       if (studentName) {
         return createJsonResponse({
@@ -136,6 +137,9 @@ function doGet(e) {
     // Default: Get all payments (for admin verification panel)
     const sheet = getOrCreatePaymentsSheet();
     const data = sheet.getDataRange().getValues();
+    if (data.length <= 1) {
+      return createJsonResponse({ status: 'success', data: [] });
+    }
     const headers = data[0];
     const rows = data.slice(1).map(row => {
       let obj = {};
