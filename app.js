@@ -112,7 +112,7 @@ async function fetchFeeItemsFromGas() {
     const url = CONFIG.GOOGLE_SCRIPT_URL + (CONFIG.GOOGLE_SCRIPT_URL.includes('?') ? '&' : '?') + 'action=getFeeItems&t=' + Date.now();
     const response = await fetch(url);
     const result = await response.json();
-    if (result && result.status === 'success' && Array.isArray(result.data) && result.data.length > 0) {
+    if (result && result.status === 'success' && Array.isArray(result.data)) {
       feeItems = result.data.map(item => {
         let cleanDueDate = item.dueDate ? item.dueDate.toString() : '';
         if (cleanDueDate.includes('GMT') || cleanDueDate.includes('T')) {
@@ -132,7 +132,7 @@ async function fetchFeeItemsFromGas() {
       });
       localStorage.setItem('kmitl_pay_fee_items', JSON.stringify(feeItems));
       renderStudentDashboard();
-      if (currentView === 'admin') renderAdminDashboard();
+      renderAdminDashboard();
     }
   } catch (err) {
     console.warn('Fetch fee items error:', err);
@@ -1117,10 +1117,8 @@ async function syncAllAdminData() {
             qrRef: row['ข้อมูล QR Ref บนสลิป'] ? row['ข้อมูล QR Ref บนสลิป'].toString() : '',
             remark: row['หมายเหตุ'] ? row['หมายเหตุ'].toString() : ''
           }));
-          if (sheetSubmissions.length > 0) {
-            submissions = sheetSubmissions;
-            localStorage.setItem('kmitl_pay_submissions', JSON.stringify(submissions));
-          }
+          submissions = sheetSubmissions;
+          localStorage.setItem('kmitl_pay_submissions', JSON.stringify(submissions));
         }
       } catch (e) {
         console.warn('Sync submissions error:', e);
