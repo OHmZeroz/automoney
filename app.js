@@ -87,6 +87,14 @@ let submissions = JSON.parse(localStorage.getItem('kmitl_pay_submissions')) || [
 document.addEventListener('DOMContentLoaded', async () => {
   setupDragAndDrop();
   checkGasConfigAlert();
+  
+  // If opening admin.html page, immediately render admin view
+  if (window.location.pathname.toLowerCase().includes('admin.html')) {
+    currentView = 'admin';
+    renderAdminDashboard();
+    return;
+  }
+
   const liffLoggedIn = await checkLiffAutoLogin();
   if (!liffLoggedIn) {
     checkSavedSession();

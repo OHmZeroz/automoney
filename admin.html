@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>แผงเหรัญญิกห้องเรียน | Admin KMITL Class Pay</title>
+  
+  <!-- SEO & Meta -->
+  <meta name="description" content="แผงจัดการและตรวจสอบการชำระเงินประจำห้องเรียน สำหรับเหรัญญิก KMITL">
+  <meta name="theme-color" content="#ff6b00">
+
+  <!-- External Libraries & Fonts -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="styles.css">
+  
+  <!-- QRCode & jsQR Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+</head>
+<body>
+
+  <!-- Navigation Bar -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="admin.html" class="brand">
+        <div class="brand-logo" style="background: linear-gradient(135deg, var(--kmitl-orange), #d97706);">A</div>
+        <div class="brand-text">
+          <h1>Admin KMITL Pay</h1>
+          <span>แผงควบคุมเหรัญญิกห้องเรียน</span>
+        </div>
+      </a>
+
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <button class="btn btn-secondary btn-sm" onclick="openConfigModal()">
+          <i class="fa-solid fa-gear"></i> ตั้งค่าระบบ
+        </button>
+        <a href="index.html" class="btn btn-primary btn-sm">
+          <i class="fa-solid fa-graduation-cap"></i> ไปหน้านักศึกษา
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Connection Status Alert -->
+  <div class="app-container" style="padding-top: 1.5rem; padding-bottom: 0;">
+    <div id="gasStatusAlert" style="margin-bottom: 1.5rem; display: none;"></div>
+  </div>
+
+  <!-- ADMIN DASHBOARD SECTION -->
+  <main class="app-container" style="padding-top: 1rem;">
+    <div class="glass-panel" style="padding: 2rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
+        <div>
+          <h2 style="font-size: 1.75rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 10px;">
+            <i class="fa-solid fa-user-shield" style="color: var(--kmitl-orange);"></i> แผงตรวจสอบและจัดการชำระเงิน
+          </h2>
+          <p style="color: var(--text-secondary); margin-top: 4px;">ตรวจสอบสลิปการโอนเงิน, สร้างรายการเรียกเก็บเงิน และอนุมัติการชำระเงิน</p>
+        </div>
+        <button class="btn btn-primary" onclick="openCreateFeeModal()">
+          <i class="fa-solid fa-plus"></i> สร้างรายการเก็บเงินใหม่
+        </button>
+      </div>
+
+      <!-- Admin Fee Items Management -->
+      <div class="section-header">
+        <h3 class="section-title">
+          <i class="fa-solid fa-folder-plus"></i> รายการเก็บเงินห้องทั้งหมด
+        </h3>
+      </div>
+
+      <div class="table-container" style="margin-bottom: 2.5rem;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ชื่อรายการ</th>
+              <th>หมวดหมู่</th>
+              <th>จำนวนเงิน</th>
+              <th>วันครบกำหนด</th>
+              <th>การจัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="adminFeeItemsTable">
+            <!-- Rendered by JS -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Admin Data Verification Table -->
+      <div class="section-header">
+        <h3 class="section-title">
+          <i class="fa-solid fa-list-check"></i> รายการส่งสลิปชำระเงินทั้งหมด
+        </h3>
+      </div>
+
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>เวลาส่ง</th>
+              <th>ชื่อนักศึกษา / รหัส</th>
+              <th>รายการ</th>
+              <th>ยอดเงิน</th>
+              <th>รูปสลิป / สแกน QR</th>
+              <th>สถานะ</th>
+              <th>การจัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="adminSubmissionsTable">
+            <!-- Rendered by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- SLIP VIEW MODAL FOR ADMIN -->
+  <div class="modal-overlay" id="viewSlipModal">
+    <div class="modal-content" style="text-align: center;">
+      <div class="modal-header">
+        <h3 class="modal-title">ตรวจสอบสลิปการโอนเงิน</h3>
+        <button class="close-btn" onclick="closeModal('viewSlipModal')">&times;</button>
+      </div>
+      <img src="" id="adminSlipFullImg" style="max-width: 100%; max-height: 450px; border-radius: 12px; margin-bottom: 1rem;">
+      <div id="adminSlipMeta" style="text-align: left; background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 10px; margin-bottom: 1.5rem;">
+      </div>
+      <div style="display: flex; gap: 12px; justify-content: center;">
+        <a id="adminDriveLinkBtn" href="#" target="_blank" class="btn btn-secondary">
+          <i class="fa-solid fa-folder-open"></i> เปิดดูในโฟลเดอร์ Google Drive
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREATE NEW FEE MODAL FOR ADMIN -->
+  <div class="modal-overlay" id="createFeeModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">สร้างรายการเก็บเงินห้องใหม่</h3>
+        <button class="close-btn" onclick="closeModal('createFeeModal')">&times;</button>
+      </div>
+      <form onsubmit="handleCreateFeeSubmit(event)">
+        <div class="form-group">
+          <label class="form-label">หมวดหมู่</label>
+          <input type="text" id="newFeeCategory" class="form-control" placeholder="เช่น ค่าห้อง, ค่าเสื้อ, ค่ากิจกรรม" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">ชื่อรายการเก็บเงิน *</label>
+          <input type="text" id="newFeeName" class="form-control" placeholder="เช่น ค่าชีทเรียนวิชา Web Dev" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">รายละเอียด</label>
+          <textarea id="newFeeDesc" class="form-control" rows="3" placeholder="ระบุรายละเอียด เช่น กำหนดส่งภายในสิ้นเดือน"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">จำนวนเงิน (บาท) *</label>
+          <input type="number" id="newFeeAmount" class="form-control" min="1" step="0.5" placeholder="100" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">วันกำหนดส่ง</label>
+          <input type="date" id="newFeeDueDate" class="form-control">
+        </div>
+        <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('createFeeModal')">ยกเลิก</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-plus"></i> บันทึกรายการ
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- GOOGLE & LINE SETTINGS MODAL FOR ADMIN -->
+  <div class="modal-overlay" id="configModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="fa-solid fa-gear" style="color: var(--kmitl-orange);"></i> ตั้งค่าการเชื่อมต่อ Google & LINE</h3>
+        <button class="close-btn" onclick="closeModal('configModal')">&times;</button>
+      </div>
+      <form onsubmit="handleSaveConfig(event)">
+        <div class="form-group">
+          <label class="form-label">Google Apps Script Web App URL *</label>
+          <input type="url" id="cfgScriptUrl" class="form-control" placeholder="https://script.google.com/macros/s/AKfycb.../exec" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">LINE Login Channel ID / LIFF ID</label>
+          <input type="text" id="cfgLineChannelId" class="form-control" placeholder="ป้อน LINE Channel ID">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">LINE LIFF ID</label>
+          <input type="text" id="cfgLiffId" class="form-control" placeholder="ป้อน LIFF ID (เช่น 2010796892-xxxxxxx)">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">LINE Login Channel Secret</label>
+          <input type="password" id="cfgLineChannelSecret" class="form-control" placeholder="ป้อน LINE Channel Secret">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">เบอร์พร้อมเพย์ (PromptPay Number) *</label>
+          <input type="text" id="cfgPromptPay" class="form-control" placeholder="0891234567" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">ชื่อบัญชีรับเงิน *</label>
+          <input type="text" id="cfgPromptPayName" class="form-control" placeholder="เหรัญญิกห้อง KMITL" required>
+        </div>
+
+        <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('configModal')">ยกเลิก</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-floppy-disk"></i> บันทึกการตั้งค่า
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- App Script Logic -->
+  <script src="app.js"></script>
+</body>
+</html>

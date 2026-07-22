@@ -439,12 +439,26 @@ function getStudentSheet(ss) {
 }
 
 /**
- * Save Base64 Image to Google Drive Folder
+ * Save Base64 Image to Google Drive Subfolder (Grouped by Student ID)
  */
-function saveSlipToDrive(email, feeName, base64Data) {
+function saveSlipToDrive(studentIdOrEmail, feeName, base64Data) {
   try {
-    const folder = DriveApp.getFolderById(CONFIG.FOLDER_ID);
+    const parentFolder = DriveApp.getFolderById(CONFIG.FOLDER_ID);
     
+    // Clean folder name (e.g. Student ID: 69010012)
+    let folderName = studentIdOrEmail ? studentIdOrEmail.toString().trim() : 'ไม่ระบุรหัส';
+    folderName = folderName.replace(/[^a-zA-Z0-9\u0E00-\u0E7F_-]/g, '_');
+
+    // Find or create subfolder for this student ID
+    const existingFolders = parentFolder.getFoldersByName(folderName);
+    let targetFolder;
+    if (existingFolders.hasNext()) {
+      targetFolder = existingFolders.next();
+    } else {
+      targetFolder = parentFolder.createFolder(folderName);
+      targetFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    }
+
     let contentType = 'image/png';
     let rawBase64 = base64Data;
     
@@ -458,12 +472,11 @@ function saveSlipToDrive(email, feeName, base64Data) {
     }
     
     const decodedBytes = Utilities.base64Decode(rawBase64);
-    const cleanEmail = email.replace(/[^a-zA-Z0-9]/g, '_');
     const cleanFee = feeName.replace(/[^a-zA-Z0-9\u0E00-\u0E7F]/g, '_').substring(0, 15);
-    const fileName = `SLIP_${cleanEmail}_${cleanFee}_${Date.now()}.png`;
+    const fileName = `SLIP_${folderName}_${cleanFee}_${Date.now()}.png`;
     
     const blob = Utilities.newBlob(decodedBytes, contentType, fileName);
-    const file = folder.createFile(blob);
+    const file = targetFolder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     
     return file.getUrl();
