@@ -864,12 +864,13 @@ async function handlePaymentSubmit(e) {
   submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึกลง Google Drive & Sheet...`;
 
   const studentName = currentUser ? currentUser.name : 'นักศึกษา KMITL';
-  const studentEmail = currentUser ? currentUser.email : 'student@kmitl.ac.th';
+  const studentId = currentUser ? (currentUser.studentId || currentUser.name || '69010012') : '69010012';
 
   const newSubmission = {
     id: 'sub-' + Date.now(),
     studentName: studentName,
-    studentEmail: studentEmail,
+    studentId: studentId,
+    studentEmail: studentId,
     feeId: selectedFeeItem ? selectedFeeItem.id : 'fee-101',
     feeName: selectedFeeItem ? selectedFeeItem.name : 'ค่าห้องประจำเดือน',
     amount: selectedFeeItem ? selectedFeeItem.amount : 100,

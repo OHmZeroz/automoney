@@ -176,7 +176,7 @@ function doPost(e) {
 
     // --- Action 2: Submit Payment Slip (Save to Drive & Sheet) ---
     const studentName = contents.studentName || 'ไม่ระบุชื่อ';
-    const studentEmail = contents.studentEmail || contents.studentId || 'ไม่ระบุข้อมูล';
+    const studentId = contents.studentId || contents.studentEmail || 'ไม่ระบุรหัส';
     const feeName = contents.feeName || 'ค่าห้อง';
     const amount = contents.amount || 0;
     const slipBase64 = contents.slipBase64 || '';
@@ -187,7 +187,7 @@ function doPost(e) {
     let slipDriveUrl = 'https://drive.google.com/drive/folders/' + CONFIG.FOLDER_ID;
 
     if (slipBase64) {
-      slipDriveUrl = saveSlipToDrive(studentEmail, feeName, slipBase64);
+      slipDriveUrl = saveSlipToDrive(studentId, feeName, slipBase64);
     }
 
     const sheet = getOrCreatePaymentsSheet();
