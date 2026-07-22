@@ -1085,7 +1085,7 @@ function openCreateFeeModal() {
   document.getElementById('createFeeModal').classList.add('active');
 }
 
-function handleCreateFeeSubmit(e) {
+async function handleCreateFeeSubmit(e) {
   e.preventDefault();
   const category = document.getElementById('newFeeCategory').value;
   const name = document.getElementById('newFeeName').value;
@@ -1102,51 +1102,54 @@ function handleCreateFeeSubmit(e) {
     dueDate: dueDate
   };
 
-  // Push and persist to local array
+  // Push to local array for instant UI feedback
   feeItems.push(newFee);
   saveFeeItemsToStorage();
+  closeModal('createFeeModal');
+  showToast('กำลังบันทึกรายการลง Google Sheet...', 'info');
+
+  renderStudentDashboard();
+  renderAdminDashboard();
 
   // Sync to Google Sheet
   if (CONFIG.GOOGLE_SCRIPT_URL) {
     try {
-      fetch(CONFIG.GOOGLE_SCRIPT_URL, {
+      await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: 'saveFeeItem', feeItem: newFee })
       });
+      showToast('สร้างและซิงก์รายการเก็บเงินใหม่เรียบร้อยแล้ว!', 'success');
+      fetchFeeItemsFromGas();
     } catch (err) {
       console.warn('Sync fee item POST error:', err);
     }
   }
-
-  closeModal('createFeeModal');
-  showToast('เพิ่มรายการเก็บเงินใหม่เรียบร้อยแล้ว!', 'success');
-  
-  renderStudentDashboard();
-  if (currentView === 'admin') renderAdminDashboard();
 }
 
-function deleteFeeItem(feeId) {
+async function deleteFeeItem(feeId) {
   if (confirm('คุณต้องการลบรายการเก็บเงินนี้ใช่หรือไม่?')) {
     feeItems = feeItems.filter(f => f.id !== feeId);
     saveFeeItemsToStorage();
 
+    renderAdminDashboard();
+    renderStudentDashboard();
+    showToast('กำลังลบรายการใน Google Sheet...', 'info');
+
     // Sync deletion to Google Sheet
     if (CONFIG.GOOGLE_SCRIPT_URL) {
       try {
-        fetch(CONFIG.GOOGLE_SCRIPT_URL, {
+        await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ action: 'deleteFeeItem', feeId: feeId })
         });
+        showToast('ลบรายการเก็บเงินเรียบร้อยแล้ว', 'info');
+        fetchFeeItemsFromGas();
       } catch (err) {
         console.warn('Delete fee item POST error:', err);
       }
     }
-
-    renderAdminDashboard();
-    renderStudentDashboard();
-    showToast('ลบรายการเก็บเงินเรียบร้อยแล้ว', 'info');
   }
 }
 
