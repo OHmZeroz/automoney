@@ -56,9 +56,14 @@
           </h2>
           <p style="color: var(--text-secondary); margin-top: 4px;">ตรวจสอบสลิปการโอนเงิน, สร้างรายการเรียกเก็บเงิน และอนุมัติการชำระเงิน</p>
         </div>
-        <button class="btn btn-primary" onclick="openCreateFeeModal()">
-          <i class="fa-solid fa-plus"></i> สร้างรายการเก็บเงินใหม่
-        </button>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <button class="btn btn-secondary" onclick="syncAllAdminData()" id="btnSyncAllData">
+            <i class="fa-solid fa-rotate"></i> บันทึก & ซิงก์ข้อมูล Google Sheet
+          </button>
+          <button class="btn btn-primary" onclick="openCreateFeeModal()">
+            <i class="fa-solid fa-plus"></i> สร้างรายการเก็บเงินใหม่
+          </button>
+        </div>
       </div>
 
       <!-- Admin Fee Items Management -->

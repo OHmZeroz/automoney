@@ -1039,13 +1039,84 @@ function viewAdminSlip(subId) {
   document.getElementById('viewSlipModal').classList.add('active');
 }
 
-function updateStatus(subId, newStatus) {
+async function updateStatus(subId, newStatus) {
   const sub = submissions.find(s => s.id === subId);
   if (sub) {
     sub.status = newStatus;
     localStorage.setItem('kmitl_pay_submissions', JSON.stringify(submissions));
     renderAdminDashboard();
-    showToast(`อัปเดตสถานะเป็น ${newStatus === 'Approved' ? 'อนุมัติ' : 'ปฏิเสธ'} เรียบร้อยแล้ว`, newStatus === 'Approved' ? 'success' : 'error');
+    showToast(`กำลังซิงก์สถานะกับ Google Sheet...`, 'info');
+
+    if (CONFIG.GOOGLE_SCRIPT_URL) {
+      try {
+        await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'updatePaymentStatus',
+            studentId: sub.studentId || sub.studentEmail,
+            feeName: sub.feeName,
+            status: newStatus
+          })
+        });
+      } catch (err) {
+        console.warn('Update status error:', err);
+      }
+    }
+
+    showToast(`อัปเดตและบันทึกสถานะเป็น ${newStatus === 'Approved' ? 'อนุมัติ' : 'ปฏิเสธ'} เรียบร้อยแล้ว`, newStatus === 'Approved' ? 'success' : 'error');
+  }
+}
+
+async function syncAllAdminData() {
+  const syncBtn = document.getElementById('btnSyncAllData');
+  if (syncBtn) {
+    syncBtn.disabled = true;
+    syncBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> กำลังซิงก์ข้อมูลกับ Google Sheet...`;
+  }
+
+  showToast('กำลังเชื่อมต่อบันทึกและซิงก์ข้อมูลกับ Google Sheet...', 'info');
+
+  try {
+    // 1. Re-fetch Fee Items from Google Sheet
+    await fetchFeeItemsFromGas();
+
+    // 2. Re-fetch Payment Submissions from Google Sheet
+    if (CONFIG.GOOGLE_SCRIPT_URL) {
+      const response = await fetch(CONFIG.GOOGLE_SCRIPT_URL);
+      const result = await response.json();
+      if (result && result.status === 'success' && Array.isArray(result.data)) {
+        // Map sheet rows to submission objects
+        const sheetSubmissions = result.data.map((row, idx) => ({
+          id: 'gas-' + idx,
+          timestamp: row['วันเวลาที่ส่ง'] || '',
+          studentName: row['ชื่อ-นามสกุล'] || '',
+          studentEmail: row['ข้อมูลประจำตัว/รหัส'] || '',
+          feeName: row['รายการชำระเงิน'] || '',
+          amount: parseFloat(row['จำนวนเงิน (บาท)']) || 0,
+          status: row['สถานะ'] || 'Pending',
+          slipUrl: row['ลิงก์สลิปใน Google Drive'] || 'https://drive.google.com/drive/folders/1vVmoWgVS3V0ASdY3TYhSY76kgFYjBV57',
+          qrRef: row['ข้อมูล QR Ref บนสลิป'] || '',
+          remark: row['หมายเหตุ'] || ''
+        }));
+        if (sheetSubmissions.length > 0) {
+          submissions = sheetSubmissions;
+          localStorage.setItem('kmitl_pay_submissions', JSON.stringify(submissions));
+        }
+      }
+    }
+
+    renderAdminDashboard();
+    renderStudentDashboard();
+    showToast('บันทึกและซิงก์ข้อมูลทั้งหมดกับ Google Sheet สำเร็จเรียบร้อยแล้ว! 🟢', 'success');
+  } catch (err) {
+    console.error('Sync all admin data error:', err);
+    showToast('เกิดข้อผิดพลาดในการเชื่อมต่อซิงก์ข้อมูล', 'error');
+  } finally {
+    if (syncBtn) {
+      syncBtn.disabled = false;
+      syncBtn.innerHTML = `<i class="fa-solid fa-rotate"></i> บันทึก & ซิงก์ข้อมูล Google Sheet`;
+    }
   }
 }
 

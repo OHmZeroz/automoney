@@ -194,6 +194,15 @@ function doPost(e) {
       return createJsonResponse(result);
     }
 
+    // --- Action 4: Update Payment Status (Approved/Rejected) ---
+    if (action === 'updatePaymentStatus') {
+      const studentId = contents.studentId;
+      const feeName = contents.feeName;
+      const status = contents.status;
+      const result = updatePaymentStatusInSheet(studentId, feeName, status);
+      return createJsonResponse(result);
+    }
+
     // --- Action 2: Submit Payment Slip (Save to Drive & Sheet) ---
     const studentName = contents.studentName || 'ไม่ระบุชื่อ';
     const studentId = contents.studentId || contents.studentEmail || 'ไม่ระบุรหัส';
@@ -613,4 +622,23 @@ function deleteFeeItemFromSheet(feeId) {
     }
   }
   return { status: 'error', message: 'ไม่พบรายการเก็บเงินที่ต้องการลบ' };
+}
+
+function updatePaymentStatusInSheet(studentId, feeName, status) {
+  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(CONFIG.PAYMENTS_SHEET_NAME);
+  if (!sheet) return { status: 'error', message: 'ไม่พบชีตรายการชำระเงิน' };
+  
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    const rowId = data[i][2] ? data[i][2].toString().trim() : '';
+    const rowFee = data[i][3] ? data[i][3].toString().trim() : '';
+    
+    if ((!studentId || rowId === studentId.toString().trim()) && (!feeName || rowFee === feeName.toString().trim())) {
+      sheet.getRange(i + 1, 6).setValue(status);
+      SpreadsheetApp.flush();
+      return { status: 'success', message: 'อัปเดตสถานะเป็น ' + status + ' เรียบร้อยแล้ว' };
+    }
+  }
+  return { status: 'error', message: 'ไม่พบแถวรายการชำระเงินที่ระบุ' };
 }
