@@ -236,7 +236,11 @@ function doPost(e) {
 
     // --- Action 2: Save New Fee Item to Sheet ---
     if (action === 'saveFeeItem') {
-      const feeItem = contents.feeItem;
+      let feeItem = contents.feeItem;
+      // ถ้า feeItem มาเป็น JSON string (จาก form submission) ให้ parse ก่อน
+      if (typeof feeItem === 'string') {
+        try { feeItem = JSON.parse(feeItem); } catch(e) { Logger.log('feeItem parse error: ' + e); }
+      }
       const result = saveFeeItemToSheet(feeItem);
       return createJsonResponse(result);
     }

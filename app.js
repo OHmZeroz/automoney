@@ -1274,26 +1274,35 @@ function postToGasReliable(data) {
     form.target = uid;
     form.style.display = 'none';
 
-    // ส่งข้อมูลทั้งก้อนเป็น JSON string ใน hidden input ชื่อ 'payload'
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = 'payload';
-    input.value = JSON.stringify(data);
-    form.appendChild(input);
+    // สร้าง hidden input สำหรับแต่ละ field แยกกัน
+    // (ทำให้ GAS เดิมอ่านจาก e.parameter ได้เลย ไม่ต้อง deploy ใหม่)
+    function addField(name, value) {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = name;
+      if (typeof value === 'object' && value !== null) {
+        input.value = JSON.stringify(value);
+      } else {
+        input.value = (value != null) ? String(value) : '';
+      }
+      form.appendChild(input);
+    }
+
+    for (const [key, value] of Object.entries(data)) {
+      addField(key, value);
+    }
 
     document.body.appendChild(form);
 
     // ตั้ง timeout สำหรับกรณีที่ GAS ไม่ตอบ
     const timeout = setTimeout(() => {
       cleanup();
-      // ถึงแม้จะ timeout ก็ถือว่าส่งข้อมูลไปแล้ว (GAS อาจทำงานช้า)
       resolve({ status: 'timeout', message: 'ส่งข้อมูลแล้ว แต่รอ GAS ตอบกลับนาน (timeout)' });
     }, 15000);
 
     // เมื่อ iframe โหลดเสร็จ = GAS รับข้อมูลแล้ว
     iframe.onload = () => {
       clearTimeout(timeout);
-      // รอเพิ่มอีกนิดเพื่อให้ GAS flush ข้อมูลลง sheet
       setTimeout(() => {
         cleanup();
         resolve({ status: 'success' });
@@ -1308,7 +1317,7 @@ function postToGasReliable(data) {
 
     // Submit form!
     form.submit();
-    console.log('[postToGasReliable] Submitted data via form/iframe:', data.action);
+    console.log('[postToGasReliable] Submitted data via form/iframe:', data.action, Object.keys(data));
 
     function cleanup() {
       try { document.body.removeChild(form); } catch(e) {}
