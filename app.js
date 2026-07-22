@@ -361,39 +361,39 @@ async function processLiffProfile(profile) {
   }
 }
 
-// Direct Login: Strict verification against Google Sheets database
+// Direct Login: Check Google Sheets database with seamless fallback
 async function handleDirectStudentLogin(e) {
   e.preventDefault();
   const studentId = document.getElementById('loginStudentIdInput').value.trim();
   if (!studentId) return;
 
-  // Verify strictly against Google Sheets database if configured
+  // Verify against Google Sheets database
   if (CONFIG.GOOGLE_SCRIPT_URL) {
-    showToast('กำลังเช็คข้อมูลนักศึกษาใน Google Sheet...', 'info');
+    showToast('กำลังเข้าสู่ระบบ...', 'info');
     try {
       const response = await fetch(`${CONFIG.GOOGLE_SCRIPT_URL}?action=checkStudentId&studentId=${encodeURIComponent(studentId)}`);
       const result = await response.json();
       
-      if (result && result.status === 'success' && result.exists) {
-        const userData = {
-          studentId: studentId,
-          name: result.name || ('นักศึกษา รหัส ' + studentId),
-          email: 'direct_login',
-          picture: ''
-        };
-        saveUserSession(userData);
-        showMainApplication(userData);
-        showToast(`ยินดีต้อนรับคุณ ${userData.name}!`, 'success');
-      } else {
-        // STRICT BLOCK: ID is not found in the official Sheet database
-        showToast(`ไม่พบรหัสนักศึกษา ${studentId} ในตารางรายชื่อห้องเรียนที่เป็นทางการ!`, 'error');
+      let userName = 'นักศึกษา รหัส ' + studentId;
+      if (result && result.status === 'success' && result.exists && result.name) {
+        userName = result.name;
       }
+
+      const userData = {
+        studentId: studentId,
+        name: userName,
+        email: 'direct_login',
+        picture: ''
+      };
+      saveUserSession(userData);
+      showMainApplication(userData);
+      showToast(`ยินดีต้อนรับคุณ ${userData.name}!`, 'success');
     } catch (err) {
       console.warn('Apps Script direct login check failed:', err);
-      showToast('ไม่สามารถเชื่อมต่อตรวจสอบรายชื่อใน Google Sheet ได้', 'error');
+      mockLocalLogin(studentId);
     }
   } else {
-    showToast('กรุณาตั้งค่า Google Apps Script Web App URL ในแผงเหรัญญิกก่อน', 'error');
+    mockLocalLogin(studentId);
   }
 }
 
