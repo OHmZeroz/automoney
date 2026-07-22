@@ -43,7 +43,7 @@ const DEFAULT_FEE_ITEMS = [
 let CONFIG = JSON.parse(localStorage.getItem('kmitl_pay_config')) || {};
 
 // Always use the user's active Google Apps Script & LINE Login settings
-CONFIG.GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxCRPV1AwEy6YTB68yaOBvIayfZcMg16-JadpO0IPq6g-CUhh-0ITpHmFEft-44WIJ6/exec';
+CONFIG.GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw_OxjIFz_N6wJzF_fFhoJE6P561_jBoWMs8WDO9q8b1RsnYdaDtormoQnupF1oHQ8J/exec';
 CONFIG.LINE_CHANNEL_ID = '2010796892';
 CONFIG.LINE_CHANNEL_SECRET = '9c90d738f28316e47b965d10ec2da760';
 
