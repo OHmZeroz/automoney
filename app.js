@@ -77,6 +77,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Load live payment submissions from Google Sheet
   fetchSubmissionsFromGas();
   
+  // Load live data from Google Sheet
+  fetchSubmissionsFromGas();
+  fetchFeeItemsFromGas();
+
   // If opening admin.html page, immediately render admin view
   if (window.location.pathname.toLowerCase().includes('admin.html')) {
     currentView = 'admin';
@@ -115,6 +119,49 @@ async function fetchSubmissionsFromGas() {
     }
   } catch (err) {
     console.warn('Fetch submissions error:', err);
+  }
+}
+
+async function fetchFeeItemsFromGas() {
+  if (!CONFIG.GOOGLE_SCRIPT_URL) return;
+  try {
+    const url = CONFIG.GOOGLE_SCRIPT_URL + (CONFIG.GOOGLE_SCRIPT_URL.includes('?') ? '&' : '?') + 'action=getFeeItems&t=' + Date.now();
+    const response = await fetch(url);
+    const result = await response.json();
+    if (result && result.status === 'success' && Array.isArray(result.data)) {
+      const cloudItems = result.data.map(item => {
+        let cleanDueDate = item.dueDate ? item.dueDate.toString() : '';
+        if (cleanDueDate.includes('GMT') || cleanDueDate.includes('T')) {
+          try {
+            const d = new Date(cleanDueDate);
+            cleanDueDate = d.toISOString().split('T')[0];
+          } catch(e) {}
+        }
+        return {
+          id: item.id || ('fee-' + Date.now()),
+          category: item.category || 'ค่าห้อง',
+          name: item.name || '',
+          description: item.description || '',
+          amount: parseFloat(item.amount) || 0,
+          dueDate: cleanDueDate
+        };
+      });
+
+      const mergedMap = new Map();
+      feeItems.forEach(item => {
+        if (item && item.id) mergedMap.set(item.id, item);
+      });
+      cloudItems.forEach(item => {
+        if (item && item.id) mergedMap.set(item.id, item);
+      });
+
+      feeItems = Array.from(mergedMap.values());
+      saveFeeItemsToStorage();
+      renderStudentDashboard();
+      renderAdminDashboard();
+    }
+  } catch (err) {
+    console.warn('Fetch fee items error:', err);
   }
 }
 
@@ -1050,11 +1097,35 @@ function updateStatus(subId, newStatus) {
   }
 }
 
+async function syncAllAdminData() {
+  const btn = document.getElementById('btnSyncAllData');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> กำลังซิงก์ข้อมูล...`;
+  }
+
+  showToast('กำลังเชื่อมต่อซิงก์ข้อมูลกับ Google Sheet...', 'info');
+
+  try {
+    await fetchSubmissionsFromGas();
+    await fetchFeeItemsFromGas();
+    showToast('ซิงก์และบันทึกข้อมูลกับ Google Sheet สำเร็จแล้ว! 🟢', 'success');
+  } catch (err) {
+    console.warn('Sync all error:', err);
+    showToast('เกิดข้อผิดพลาดในการซิงก์ข้อมูล', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> บันทึก & ซิงก์ข้อมูล Google Sheet`;
+    }
+  }
+}
+
 function openCreateFeeModal() {
   document.getElementById('createFeeModal').classList.add('active');
 }
 
-function handleCreateFeeSubmit(e) {
+async function handleCreateFeeSubmit(e) {
   e.preventDefault();
   const category = document.getElementById('newFeeCategory').value;
   const name = document.getElementById('newFeeName').value;
@@ -1076,18 +1147,58 @@ function handleCreateFeeSubmit(e) {
   saveFeeItemsToStorage();
 
   closeModal('createFeeModal');
+
+  // Reset form inputs
+  document.getElementById('newFeeCategory').value = '';
+  document.getElementById('newFeeName').value = '';
+  document.getElementById('newFeeDesc').value = '';
+  document.getElementById('newFeeAmount').value = '';
+
+  renderStudentDashboard();
+  renderAdminDashboard();
   showToast('เพิ่มรายการเก็บเงินใหม่เรียบร้อยแล้ว!', 'success');
-  
-  if (currentView === 'student') renderStudentDashboard();
-  if (currentView === 'admin') renderAdminDashboard();
+
+  // Sync / Post to Google Sheet in background
+  if (CONFIG.GOOGLE_SCRIPT_URL) {
+    try {
+      await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'saveFeeItem', feeItem: newFee })
+      });
+      showToast('ซิงก์บันทึกลง Google Sheet เรียบร้อยแล้ว! 🟢', 'success');
+    } catch (err) {
+      console.warn('Sync fee item POST error:', err);
+    }
+  }
 }
 
-function deleteFeeItem(feeId) {
+async function deleteFeeItem(feeId) {
+  const itemToDelete = feeItems.find(f => f.id === feeId);
   if (confirm('คุณต้องการลบรายการเก็บเงินนี้ใช่หรือไม่?')) {
     feeItems = feeItems.filter(f => f.id !== feeId);
     saveFeeItemsToStorage();
     renderAdminDashboard();
     showToast('ลบรายการเก็บเงินเรียบร้อยแล้ว', 'info');
+
+    if (CONFIG.GOOGLE_SCRIPT_URL) {
+      try {
+        await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'deleteFeeItem',
+            feeId: feeId,
+            feeName: itemToDelete ? itemToDelete.name : ''
+          })
+        });
+        showToast('ลบรายการออกจาก Google Sheet เรียบร้อยแล้ว 🟢', 'success');
+      } catch (err) {
+        console.warn('Delete fee item error:', err);
+      }
+    }
   }
 }
 
