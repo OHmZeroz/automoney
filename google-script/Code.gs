@@ -247,7 +247,17 @@ function doPost(e) {
       const studentId = contents.studentId;
       const feeName = contents.feeName;
       const status = contents.status;
+      const amount = contents.amount || 0;
       const result = updatePaymentStatusInSheet(studentId, feeName, status);
+
+      // If Approved, mark the student roster sheet with payment info
+      if (status === 'Approved') {
+        try {
+          markStudentPaymentInRoster(studentId, feeName, amount);
+        } catch (err) {
+          Logger.log('markStudentPaymentInRoster error: ' + err.toString());
+        }
+      }
 
       // Send LINE notification to the student about their approval/rejection status
       try {
@@ -907,4 +917,86 @@ function notifyPaymentSuccess(studentId, feeName) {
     Logger.log("notifyPaymentSuccess failed: " + e.toString());
     return { status: 'error', message: e.toString() };
   }
+}
+
+/**
+ * Mark payment in the student roster (รายชื่อนักศึกษา) sheet.
+ * Finds (or creates) a column for the fee name, then writes "✅ {amount} บาท" 
+ * in the student's row. If the student has already paid some amount, it accumulates.
+ */
+function markStudentPaymentInRoster(studentId, feeName, amount) {
+  if (!studentId || !feeName) return;
+  
+  const ss = getSpreadsheet();
+  const sheet = getStudentSheet(ss);
+  if (!sheet) {
+    Logger.log('markStudentPaymentInRoster: Student sheet not found');
+    return;
+  }
+  
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  
+  // Find student ID column
+  const idColIdx = findColumnIndex(headers, ['เลขประจำตัว', 'รหัสนักศึกษา', 'student id', 'id']);
+  if (idColIdx === -1) {
+    Logger.log('markStudentPaymentInRoster: ID column not found');
+    return;
+  }
+  
+  // Find or create fee column in roster
+  let feeColIdx = -1;
+  const cleanFeeName = feeName.toString().trim().toLowerCase();
+  for (let c = 0; c < headers.length; c++) {
+    if (headers[c] && headers[c].toString().trim().toLowerCase() === cleanFeeName) {
+      feeColIdx = c;
+      break;
+    }
+  }
+  
+  // If fee column doesn't exist, create it at the end
+  if (feeColIdx === -1) {
+    feeColIdx = headers.length;
+    const newHeaderCell = sheet.getRange(1, feeColIdx + 1);
+    newHeaderCell.setValue(feeName);
+    newHeaderCell.setBackground('#ff6b00');
+    newHeaderCell.setFontColor('#ffffff');
+    newHeaderCell.setFontWeight('bold');
+    Logger.log('Created new fee column: ' + feeName + ' at index ' + feeColIdx);
+  }
+  
+  // Find student row
+  const cleanSearchId = studentId.toString().split('.')[0].replace(/[^0-9a-zA-Z]/g, '').trim().toLowerCase();
+  
+  for (let i = 1; i < data.length; i++) {
+    if (!data[i][idColIdx]) continue;
+    const cleanRowId = data[i][idColIdx].toString().split('.')[0].replace(/[^0-9a-zA-Z]/g, '').trim().toLowerCase();
+    
+    if (cleanRowId === cleanSearchId) {
+      // Check if there's already a value (accumulate payments)
+      const existingVal = sheet.getRange(i + 1, feeColIdx + 1).getValue();
+      let totalPaid = parseFloat(amount) || 0;
+      
+      if (existingVal) {
+        // Extract existing amount from format like "✅ 200 บาท" or just a number
+        const existingStr = existingVal.toString();
+        const numMatch = existingStr.match(/[\d,.]+/);
+        if (numMatch) {
+          totalPaid += parseFloat(numMatch[0].replace(/,/g, '')) || 0;
+        }
+      }
+      
+      // Write the payment info: ✅ {totalPaid} บาท
+      const cell = sheet.getRange(i + 1, feeColIdx + 1);
+      cell.setValue('✅ ' + totalPaid.toLocaleString() + ' บาท');
+      cell.setBackground('#d4edda');  // Light green background
+      cell.setFontColor('#155724');   // Dark green text
+      
+      SpreadsheetApp.flush();
+      Logger.log('Marked payment for student ' + studentId + ': ' + feeName + ' = ' + totalPaid + ' บาท');
+      return;
+    }
+  }
+  
+  Logger.log('markStudentPaymentInRoster: Student ID ' + studentId + ' not found in roster');
 }

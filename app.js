@@ -1146,7 +1146,8 @@ async function updateStatus(subId, newStatus) {
           action: 'updatePaymentStatus',
           studentId: sub.studentEmail || sub.studentId || '',
           feeName: sub.feeName || '',
-          status: newStatus
+          status: newStatus,
+          amount: sub.amount || 0
         });
         showToast('อัปเดตสถานะใน Google Sheet เรียบร้อยแล้ว 🟢', 'success');
       } catch (err) {
