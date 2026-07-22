@@ -1012,9 +1012,14 @@ function renderAdminFeeItemsTable() {
       <td><strong style="color:var(--kmitl-gold);">฿${item.amount.toLocaleString()}</strong></td>
       <td>${item.dueDate}</td>
       <td>
-        <button class="btn btn-danger btn-sm" onclick="deleteFeeItem('${item.id}')">
-          <i class="fa-solid fa-trash"></i> ลบรายการ
-        </button>
+        <div style="display:flex; gap:6px;">
+          <button class="btn btn-success btn-sm" onclick="syncFeeItemToSheet('${item.id}')">
+            <i class="fa-solid fa-cloud-arrow-up"></i> ส่งไปชีท
+          </button>
+          <button class="btn btn-danger btn-sm" onclick="deleteFeeItem('${item.id}')">
+            <i class="fa-solid fa-trash"></i> ลบรายการ
+          </button>
+        </div>
       </td>
     `;
     tbody.appendChild(tr);
@@ -1205,6 +1210,36 @@ async function deleteFeeItem(feeId) {
         console.warn('Delete fee item error:', err);
       }
     }
+  }
+}
+
+async function syncFeeItemToSheet(feeId) {
+  const item = feeItems.find(f => f.id === feeId);
+  if (!item) return;
+
+  showToast('กำลังส่งรายการเก็บเงินไปยัง Google Sheet...', 'info');
+
+  if (CONFIG.GOOGLE_SCRIPT_URL) {
+    try {
+      // First delete in case it exists to prevent duplication
+      try {
+        await postToGasReliable({
+          action: 'deleteFeeItem',
+          feeId: feeId,
+          feeName: item.name
+        });
+      } catch (e) {
+        console.warn('Pre-delete error (expected if not in sheet):', e);
+      }
+
+      await postToGasReliable({ action: 'saveFeeItem', feeItem: item });
+      showToast('ส่งข้อมูลรายการเก็บเงินไปยัง Google Sheet สำเร็จแล้ว! 🟢', 'success');
+    } catch (err) {
+      console.warn('Sync fee item error:', err);
+      showToast('ส่งข้อมูลไปยัง Google Sheet ไม่สำเร็จ', 'error');
+    }
+  } else {
+    showToast('กรุณาตั้งค่า Google Apps Script Web App URL ก่อน', 'error');
   }
 }
 
