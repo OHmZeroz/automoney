@@ -84,12 +84,30 @@ let submissions = JSON.parse(localStorage.getItem('kmitl_pay_submissions')) || [
 // ==========================================
 // APPLICATION INITIALIZATION
 // ==========================================
-document.addEventListener('DOMContentLoaded', () => {
-  checkSavedSession();
+document.addEventListener('DOMContentLoaded', async () => {
   setupDragAndDrop();
   checkGasConfigAlert();
-  initGoogleSignIn();
+  const liffLoggedIn = await checkLiffAutoLogin();
+  if (!liffLoggedIn) {
+    checkSavedSession();
+  }
 });
+
+async function checkLiffAutoLogin() {
+  if (CONFIG.LIFF_ID && typeof liff !== 'undefined') {
+    try {
+      await liff.init({ liffId: CONFIG.LIFF_ID });
+      if (liff.isLoggedIn()) {
+        const profile = await liff.getProfile();
+        await processLiffProfile(profile);
+        return true;
+      }
+    } catch (err) {
+      console.warn('LIFF Auto-login check:', err);
+    }
+  }
+  return false;
+}
 
 // Initialize Dynamic Google Sign-In
 function initGoogleSignIn() {
