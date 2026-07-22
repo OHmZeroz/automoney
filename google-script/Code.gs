@@ -248,6 +248,19 @@ function doPost(e) {
       const feeName = contents.feeName;
       const status = contents.status;
       const result = updatePaymentStatusInSheet(studentId, feeName, status);
+
+      // Send LINE notification to the student about their approval/rejection status
+      try {
+        const studentLineId = getStudentLineUserId(studentId);
+        if (studentLineId) {
+          const statusText = status === 'Approved' ? '✅ อนุมัติเรียบร้อยแล้ว' : '❌ ถูกปฏิเสธ (กรุณาตรวจสอบสลิปใหม่อีกครั้ง)';
+          const pushMsg = `📢 แจ้งเตือนสถานะการชำระเงิน\n📚 รายการ: ${feeName}\nสถานะ: ${statusText}`;
+          sendLinePushMessage(studentLineId, pushMsg);
+        }
+      } catch (err) {
+        Logger.log('Student status push alert error: ' + err.toString());
+      }
+
       return createJsonResponse(result);
     }
 
@@ -306,17 +319,6 @@ function doPost(e) {
       ]);
       SpreadsheetApp.flush();
       Logger.log('Payment row appended and flushed successfully!');
-
-      // Send LINE Bot Push message to Admin (student ID 69010115)
-      try {
-        const adminLineId = getAdminLineUserId();
-        if (adminLineId) {
-          const pushMsg = `📢 มีการส่งสลิปชำระเงินใหม่!\n👤 นักศึกษา: ${studentName}\n🆔 รหัส: ${studentId}\n📚 รายการชำระ: ${feeName}\n💰 ยอดชำระ: ฿${amount}\n💬 หมายเหตุ: ${remark}\n📂 ลิงก์สลิป: ${slipDriveUrl}`;
-          sendLinePushMessage(adminLineId, pushMsg);
-        }
-      } catch (err) {
-        Logger.log('Line bot push error: ' + err.toString());
-      }
 
       return createJsonResponse({
         status: 'success',
