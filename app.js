@@ -105,7 +105,7 @@ async function fetchFeeItemsFromGas() {
     const response = await fetch(url);
     const result = await response.json();
     if (result && result.status === 'success' && Array.isArray(result.data)) {
-      feeItems = result.data.map(item => {
+      const cloudItems = result.data.map(item => {
         let cleanDueDate = item.dueDate ? item.dueDate.toString() : '';
         if (cleanDueDate.includes('GMT') || cleanDueDate.includes('T')) {
           try {
@@ -122,7 +122,18 @@ async function fetchFeeItemsFromGas() {
           dueDate: cleanDueDate
         };
       });
-      localStorage.setItem('kmitl_pay_fee_items', JSON.stringify(feeItems));
+
+      // Merge Cloud items with current feeItems so newly created items never disappear!
+      const mergedMap = new Map();
+      feeItems.forEach(item => {
+        if (item && item.id) mergedMap.set(item.id, item);
+      });
+      cloudItems.forEach(item => {
+        if (item && item.id) mergedMap.set(item.id, item);
+      });
+
+      feeItems = Array.from(mergedMap.values());
+      saveFeeItemsToStorage();
       renderStudentDashboard();
       renderAdminDashboard();
     }
