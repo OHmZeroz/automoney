@@ -52,25 +52,24 @@ function saveFeeItemsToStorage() {
 document.addEventListener('DOMContentLoaded', async () => {
   setupDragAndDrop();
   checkGasConfigAlert();
-  
-  // 100% Cloud Live Fetching from Google Sheet
-  await fetchFeeItemsFromGas();
-  await fetchSubmissionsFromGas();
-  
-  // If opening admin.html page, immediately check admin PIN authentication
-  if (window.location.pathname.toLowerCase().includes('admin.html')) {
+
+  // 1. Initialize Login & Saved Session IMMEDIATELY
+  if (!window.location.pathname.toLowerCase().includes('admin.html')) {
+    const liffLoggedIn = await checkLiffAutoLogin();
+    if (!liffLoggedIn) {
+      checkSavedSession();
+    }
+  } else {
     currentView = 'admin';
     const isAuthed = checkAdminAuth();
     if (isAuthed) {
       renderAdminDashboard();
     }
-    return;
   }
-
-  const liffLoggedIn = await checkLiffAutoLogin();
-  if (!liffLoggedIn) {
-    checkSavedSession();
-  }
+  
+  // 2. Fetch Live Data from Google Cloud in Background
+  fetchFeeItemsFromGas();
+  fetchSubmissionsFromGas();
 });
 
 async function fetchSubmissionsFromGas() {
