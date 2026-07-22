@@ -23,6 +23,17 @@ const CONFIG = {
 };
 
 /**
+ * [สำคัญ] รันฟังก์ชันนี้ 1 ครั้งในหน้า Apps Script เพื่อให้ Google ขึ้นปุ่มปลดล็อกสิทธิ์ UrlFetchApp (LINE API)!
+ */
+function authorizeExternalRequests() {
+  try {
+    UrlFetchApp.fetch("https://api.line.me");
+  } catch(e) {
+    Logger.log("Authorized!");
+  }
+}
+
+/**
  * Handle HTTP GET Requests
  */
 function doGet(e) {
