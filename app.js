@@ -916,17 +916,12 @@ async function handlePaymentSubmit(e) {
   // Post to Google Apps Script API
   if (CONFIG.GOOGLE_SCRIPT_URL) {
     try {
-      const response = await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
+      await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
         method: 'POST',
+        mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(newSubmission)
       });
-      const result = await response.json();
-      if (result && result.status === 'success' && result.driveUrl) {
-        newSubmission.slipUrl = result.driveUrl;
-      } else if (result && result.status === 'error') {
-        showToast('Google Apps Script: ' + result.message, 'error');
-      }
     } catch (err) {
       console.warn('Apps Script POST failed:', err);
     }
@@ -1061,6 +1056,7 @@ async function updateStatus(subId, newStatus) {
       try {
         await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
           method: 'POST',
+          mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({
             action: 'updatePaymentStatus',
@@ -1205,10 +1201,11 @@ async function handleCreateFeeSubmit(e) {
     try {
       await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
         method: 'POST',
+        mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: 'saveFeeItem', feeItem: newFee })
       });
-      showToast('ซิงก์บันทึกลง Google Sheet สำเร็จแล้ว!', 'success');
+      showToast('ซิงก์บันทึกลง Google Sheet สำเร็จแล้ว! 🟢', 'success');
     } catch (err) {
       console.warn('Sync fee item POST error:', err);
     }
@@ -1232,10 +1229,11 @@ async function deleteFeeItem(feeId) {
       try {
         await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
           method: 'POST',
+          mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ action: 'deleteFeeItem', feeId: feeId, feeName: itemName })
         });
-        showToast('ลบรายการเก็บเงินเรียบร้อยแล้ว!', 'success');
+        showToast('ลบรายการใน Google Sheet เรียบร้อยแล้ว!', 'success');
         fetchFeeItemsFromGas();
       } catch (err) {
         console.warn('Delete fee item POST error:', err);
