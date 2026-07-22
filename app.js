@@ -11,33 +11,8 @@
  * - Admin Treasurer View & Student Dashboard
  */
 
-// Default Fee Items List
-const DEFAULT_FEE_ITEMS = [
-  {
-    id: 'fee-101',
-    category: 'ค่าห้องประจำเดือน',
-    name: 'ค่ากองกลางห้องเรียน ประจำเดือน ก.ค. 2569',
-    description: 'สำหรับค่าอุปกรณ์ทำความสะอาดห้อง ค่าชีทส่วนกลาง และสวัสดิการห้อง',
-    amount: 100,
-    dueDate: '2026-07-31'
-  },
-  {
-    id: 'fee-102',
-    category: 'ค่าเสื้อช็อป & ป้ายชื่อ',
-    name: 'ค่าเสื้อช็อปภาควิชา + ป้ายชื่อสแกน',
-    description: 'สำหรับนักศึกษาชั้นปีที่ 1 และผู้ที่สั่งเพิ่ม ชำระก่อนสั่งตัดล็อตแรก',
-    amount: 450,
-    dueDate: '2026-08-15'
-  },
-  {
-    id: 'fee-103',
-    category: 'ค่าเอกสารการเรียน',
-    name: 'ค่าชีทสรุปเตรียมสอบ Midterm วิชา Core Math',
-    description: 'รวมค่าจัดพิมพ์ชีทเข้าเล่ม 120 หน้า',
-    amount: 80,
-    dueDate: '2026-08-05'
-  }
-];
+// Default Fee Items List (Loaded dynamically from Google Sheet)
+const DEFAULT_FEE_ITEMS = [];
 
 // Configuration (Loaded from LocalStorage or default)
 let CONFIG = JSON.parse(localStorage.getItem('kmitl_pay_config')) || {};
@@ -62,8 +37,8 @@ let selectedFeeItem = null;
 let currentSlipBase64 = null;
 let currentSlipQRData = null;
 
-// Fee Items (Loaded from LocalStorage to persist across reloads)
-let feeItems = JSON.parse(localStorage.getItem('kmitl_pay_fee_items')) || DEFAULT_FEE_ITEMS;
+// Fee Items (Loaded from Google Sheet API)
+let feeItems = JSON.parse(localStorage.getItem('kmitl_pay_fee_items')) || [];
 
 // Submissions List (Loaded from LocalStorage)
 let submissions = JSON.parse(localStorage.getItem('kmitl_pay_submissions')) || [
