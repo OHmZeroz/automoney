@@ -147,15 +147,8 @@ async function fetchFeeItemsFromGas() {
         };
       });
 
-      const mergedMap = new Map();
-      feeItems.forEach(item => {
-        if (item && item.id) mergedMap.set(item.id, item);
-      });
-      cloudItems.forEach(item => {
-        if (item && item.id) mergedMap.set(item.id, item);
-      });
-
-      feeItems = Array.from(mergedMap.values());
+      // Overwrite local items with cloud items to ensure deletions sync to everyone
+      feeItems = cloudItems;
       saveFeeItemsToStorage();
       renderStudentDashboard();
       renderAdminDashboard();
