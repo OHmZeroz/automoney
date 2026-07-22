@@ -217,11 +217,29 @@ function getRedirectUri() {
 }
 
 // ==========================================
-// LINE LOGIN & BYPASS LOGIN LOGIC
+// LINE LOGIN & BYPASS LOGIN LOGIC (LIFF + OAUTH)
 // ==========================================
-function loginWithLine() {
+async function loginWithLine() {
+  // Option 1: Native LINE LIFF (Fastest, 100% Reliable, No Secret Required)
+  if (CONFIG.LIFF_ID && typeof liff !== 'undefined') {
+    showToast('กำลังเชื่อมต่อ LINE LIFF...', 'info');
+    try {
+      await liff.init({ liffId: CONFIG.LIFF_ID });
+      if (!liff.isLoggedIn()) {
+        liff.login();
+        return;
+      }
+      const profile = await liff.getProfile();
+      await processLiffProfile(profile);
+      return;
+    } catch (err) {
+      console.warn('LIFF init failed, falling back to standard LINE OAuth:', err);
+    }
+  }
+
+  // Option 2: Standard LINE OAuth Redirect
   if (!CONFIG.LINE_CHANNEL_ID) {
-    showToast('กรุณากรอก LINE Channel ID ในแผงเหรัญญิกก่อนใช้งานระบบนี้', 'error');
+    showToast('กรุณากรอก LINE Channel ID หรือ LIFF ID ในแผงเหรัญญิกก่อนใช้งานระบบนี้', 'error');
     return;
   }
   
@@ -230,6 +248,47 @@ function loginWithLine() {
   const authUrl = `https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=${CONFIG.LINE_CHANNEL_ID}&redirect_uri=${redirectUri}&state=${state}&scope=profile%20openid`;
   
   window.location.href = authUrl;
+}
+
+// Process LIFF User Profile directly
+async function processLiffProfile(profile) {
+  const lineUserId = profile.userId;
+  const lineName = profile.displayName || 'LINE User';
+  const picture = profile.pictureUrl || '';
+
+  if (!CONFIG.GOOGLE_SCRIPT_URL) {
+    showToast('ระบบไม่ได้ตั้งค่า Google Apps Script Web App URL', 'error');
+    return;
+  }
+
+  showToast('กำลังเช็คข้อมูลนักศึกษาใน Google Sheet...', 'info');
+
+  try {
+    const url = `${CONFIG.GOOGLE_SCRIPT_URL}?action=checkLineUser&lineUserId=${encodeURIComponent(lineUserId)}`;
+    const response = await fetch(url);
+    const result = await response.json();
+
+    if (result && result.status === 'success') {
+      if (result.registered) {
+        const userData = {
+          lineUserId: lineUserId,
+          name: result.name,
+          studentId: result.studentId,
+          picture: picture
+        };
+        saveUserSession(userData);
+        showMainApplication(userData);
+        showToast(`ยินดีต้อนรับกลับ คุณ ${userData.name}!`, 'success');
+      } else {
+        showRegistrationScreen(lineUserId, lineName);
+      }
+    } else {
+      showToast(result.message || 'ไม่สามารถตรวจสอบข้อมูลกับเซิร์ฟเวอร์ได้', 'error');
+    }
+  } catch (err) {
+    console.error('LIFF Profile Check Error:', err);
+    showToast('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์', 'error');
+  }
 }
 
 // Direct Login: Strict verification against Google Sheets database

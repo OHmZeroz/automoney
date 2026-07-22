@@ -84,6 +84,31 @@ function doGet(e) {
       }
     }
 
+    // --- Action 1.5: Check LINE User ID directly (for LINE LIFF) ---
+    if (action === 'checkLineUser') {
+      const lineUserId = e.parameter.lineUserId;
+      if (!lineUserId) {
+        return createJsonResponse({ status: 'error', message: 'ไม่พบ lineUserId' });
+      }
+
+      const studentInfo = findStudentByLineUserId(lineUserId);
+      if (studentInfo) {
+        return createJsonResponse({
+          status: 'success',
+          registered: true,
+          lineUserId: lineUserId,
+          name: studentInfo.name,
+          studentId: studentInfo.studentId
+        });
+      } else {
+        return createJsonResponse({
+          status: 'success',
+          registered: false,
+          lineUserId: lineUserId
+        });
+      }
+    }
+
     // --- Action 2: Direct Check Student ID (Bypass Login) ---
     if (action === 'checkStudentId') {
       const studentId = e.parameter.studentId;

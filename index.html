@@ -16,9 +16,10 @@
   <!-- Google Sign-In API -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 
-  <!-- QRCode & jsQR Libraries -->
+  <!-- QRCode, jsQR & LINE LIFF SDK Libraries -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
 <body>
 
@@ -384,8 +385,13 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label">LINE Login Channel ID (ถ้าใช้ระบบล็อกอิน LINE)</label>
+          <label class="form-label">LINE Login Channel ID / LIFF ID</label>
           <input type="text" id="cfgLineChannelId" class="form-control" placeholder="ป้อน LINE Channel ID">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">LINE LIFF ID (แนะนำสำหรับ LINE Login)</label>
+          <input type="text" id="cfgLiffId" class="form-control" placeholder="ป้อน LIFF ID (เช่น 2010796892-xxxxxxx)">
         </div>
 
         <div class="form-group">
