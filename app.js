@@ -44,8 +44,8 @@ let CONFIG = JSON.parse(localStorage.getItem('kmitl_pay_config')) || {};
 
 // Always use the user's active Google Apps Script & LINE Login settings
 CONFIG.GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxCRPV1AwEy6YTB68yaOBvIayfZcMg16-JadpO0IPq6g-CUhh-0ITpHmFEft-44WIJ6/exec';
-CONFIG.LINE_CHANNEL_ID = '2010646192';
-CONFIG.LINE_CHANNEL_SECRET = '403ab270c979e54df756e3086d08ff36';
+CONFIG.LINE_CHANNEL_ID = '2010796892';
+CONFIG.LINE_CHANNEL_SECRET = '9c90d738f28316e47b965d10ec2da760';
 
 if (!CONFIG.PROMPTPAY_NUMBER) CONFIG.PROMPTPAY_NUMBER = '0891234567';
 if (!CONFIG.PROMPTPAY_NAME) CONFIG.PROMPTPAY_NAME = 'เหรัญญิกประจำห้อง (KMITL Pay)';
