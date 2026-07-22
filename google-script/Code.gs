@@ -19,7 +19,8 @@ const CONFIG = {
   SPREADSHEET_ID: '1fl2GOuz-VgXiXLKlB9SVDE_lEdOuI6bp6Y4MS5lvffs',
   FOLDER_ID: '1vVmoWgVS3V0ASdY3TYhSY76kgFYjBV57',
   PAYMENTS_SHEET_NAME: 'รายการชำระเงิน',
-  STUDENT_SHEET_NAME: 'รายชื่อนักศึกษา'
+  STUDENT_SHEET_NAME: 'รายชื่อนักศึกษา',
+  LINE_BOT_ACCESS_TOKEN: '0aJJrMS143uyO0BqYJCuIAxiIgtJMnwvUNoMp2ozahJDauqaXXHQTAI0pQH83NPsUWBPZAONPlOW8hgMdhWNL22Cg8rRbvE6T8IsXQZ/QYWIDjVx+PwFiQtMqR4d+u4ntAGo3DU+7RbLxId+dJGPHgdB04t89/1O/w1cDnyilFU='
 };
 
 /**
@@ -289,6 +290,17 @@ function doPost(e) {
       ]);
       SpreadsheetApp.flush();
       Logger.log('Payment row appended and flushed successfully!');
+
+      // Send LINE Bot Push message to Admin (student ID 69010115)
+      try {
+        const adminLineId = getAdminLineUserId();
+        if (adminLineId) {
+          const pushMsg = `📢 มีการส่งสลิปชำระเงินใหม่!\n👤 นักศึกษา: ${studentName}\n🆔 รหัส: ${studentId}\n📚 รายการชำระ: ${feeName}\n💰 ยอดชำระ: ฿${amount}\n💬 หมายเหตุ: ${remark}\n📂 ลิงก์สลิป: ${slipDriveUrl}`;
+          sendLinePushMessage(adminLineId, pushMsg);
+        }
+      } catch (err) {
+        Logger.log('Line bot push error: ' + err.toString());
+      }
 
       return createJsonResponse({
         status: 'success',
@@ -713,4 +725,59 @@ function deleteFeeItemFromSheet(feeId, feeName) {
     }
   }
   return { status: 'error', message: 'ไม่พบรายการเก็บเงินที่ต้องการลบ' };
+}
+
+function getAdminLineUserId() {
+  const ss = getSpreadsheet();
+  const sheet = getStudentSheet(ss);
+  if (!sheet) return null;
+
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const idColIdx = findColumnIndex(headers, ['เลขประจำตัว', 'รหัสนักศึกษา', 'student id', 'id']);
+  const lineColIdx = findColumnIndex(headers, ['line id', 'line_id', 'line', 'ไลน์', 'ติดต่อ']);
+
+  if (idColIdx === -1 || lineColIdx === -1) return null;
+
+  for (let i = 1; i < data.length; i++) {
+    if (!data[i][idColIdx]) continue;
+    const cleanRowId = data[i][idColIdx].toString().split('.')[0].replace(/[^0-9a-zA-Z]/g, '').trim();
+    if (cleanRowId === '69010115') {
+      return data[i][lineColIdx] ? data[i][lineColIdx].toString().trim() : null;
+    }
+  }
+  return null;
+}
+
+function sendLinePushMessage(userId, message) {
+  const token = CONFIG.LINE_BOT_ACCESS_TOKEN;
+  if (!token || !userId) return;
+
+  const url = "https://api.line.me/v2/bot/message/push";
+  const payload = {
+    to: userId,
+    messages: [
+      {
+        type: "text",
+        text: message
+      }
+    ]
+  };
+
+  const options = {
+    method: "post",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + token
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    Logger.log("LINE Bot push status: " + response.getResponseCode() + " - " + response.getContentText());
+  } catch (e) {
+    Logger.log("LINE Bot push failed: " + e.toString());
+  }
 }
