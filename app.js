@@ -44,9 +44,9 @@ let CONFIG = JSON.parse(localStorage.getItem('kmitl_pay_config')) || {};
 
 // Always use the user's active Google Apps Script & LINE Login settings
 CONFIG.GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw_OxjIFz_N6wJzF_fFhoJE6P561_jBoWMs8WDO9q8b1RsnYdaDtormoQnupF1oHQ8J/exec';
-CONFIG.LINE_CHANNEL_ID = '2010796892';
-CONFIG.LINE_CHANNEL_SECRET = '9c90d738f28316e47b965d10ec2da760';
-CONFIG.LIFF_ID = '2010796892-9tQR4kuc';
+CONFIG.LINE_CHANNEL_ID = '2010801650';
+CONFIG.LINE_CHANNEL_SECRET = '832a75e287353de9a597989d0f23761e';
+CONFIG.LIFF_ID = '2010801650-te43AoZe';
 
 if (!CONFIG.PROMPTPAY_NUMBER) CONFIG.PROMPTPAY_NUMBER = '0891234567';
 if (!CONFIG.PROMPTPAY_NAME) CONFIG.PROMPTPAY_NAME = 'เหรัญญิกประจำห้อง (KMITL Pay)';
@@ -622,37 +622,49 @@ function renderStudentDashboard() {
   const grid = document.getElementById('feeItemsGrid');
   grid.innerHTML = '';
 
+  // Identify current user
+  const userId = currentUser ? (currentUser.studentId || currentUser.name || currentUser.email || '') : '';
+  const userSubsAll = submissions.filter(s =>
+    s.studentEmail === userId || s.studentId === userId || s.studentName === (currentUser ? currentUser.name : '')
+  );
+
   let unpaidTotal = 0;
   let paidTotal = 0;
   let pendingCount = 0;
 
   if (feeItems.length === 0) {
     grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 3rem; color: var(--text-muted);">ไม่มีรายการเก็บเงินในระบบขณะนี้</div>`;
+    document.getElementById('statUnpaid').textContent = `฿0`;
+    document.getElementById('statPaid').textContent = `฿0`;
+    document.getElementById('statPending').textContent = `0 รายการ`;
+    renderStudentHistoryTable();
+    return;
   }
 
   feeItems.forEach(item => {
-    const userId = currentUser ? (currentUser.studentId || currentUser.name || currentUser.email || '') : '';
-    const userSub = submissions.find(s => {
-      const matchFee = s.feeName === item.name || s.feeId === item.id;
-      const matchUser = s.studentEmail === userId || s.studentId === userId || s.studentName === (currentUser ? currentUser.name : '');
-      return matchFee && matchUser;
-    });
-    let statusBadge = '';
+    // Submissions related to this fee for this user
+    const relatedSubs = userSubsAll.filter(s => s.feeName === item.name || s.feeId === item.id);
+    const approvedSubs = relatedSubs.filter(s => s.status === 'Approved');
+    const pendingSubs = relatedSubs.filter(s => s.status === 'Pending');
 
-    if (userSub) {
-      if (userSub.status === 'Approved') {
-        statusBadge = '<span class="fee-badge badge-paid"><i class="fa-solid fa-check"></i> ชำระแล้ว</span>';
-        paidTotal += item.amount;
-      } else if (userSub.status === 'Pending') {
-        statusBadge = '<span class="fee-badge badge-pending"><i class="fa-solid fa-clock"></i> รอตรวจสอบ</span>';
-        pendingCount++;
-      } else {
-        statusBadge = '<span class="fee-badge badge-unpaid"><i class="fa-solid fa-triangle-exclamation"></i> สลิปไม่ผ่าน</span>';
-        unpaidTotal += item.amount;
-      }
+    const paidAmount = approvedSubs.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
+    paidTotal += paidAmount;
+
+    const remaining = Math.max(0, item.amount - paidAmount);
+    unpaidTotal += remaining;
+
+    pendingCount += pendingSubs.length;
+
+    // Determine badge
+    let statusBadge = '';
+    if (paidAmount >= item.amount) {
+      statusBadge = `<span class="fee-badge badge-paid"><i class="fa-solid fa-check"></i> ชำระแล้ว</span>`;
+    } else if (pendingSubs.length > 0) {
+      statusBadge = `<span class="fee-badge badge-pending"><i class="fa-solid fa-clock"></i> รอตรวจสอบ</span>`;
+    } else if (paidAmount > 0) {
+      statusBadge = `<span class="fee-badge badge-unpaid"><i class="fa-solid fa-circle-exclamation"></i> ชำระบางส่วน</span>`;
     } else {
-      statusBadge = '<span class="fee-badge badge-unpaid"><i class="fa-solid fa-circle-exclamation"></i> ยังไม่ได้จ่าย</span>';
-      unpaidTotal += item.amount;
+      statusBadge = `<span class="fee-badge badge-unpaid"><i class="fa-solid fa-circle-exclamation"></i> ยังไม่ได้จ่าย</span>`;
     }
 
     const card = document.createElement('div');
@@ -674,15 +686,9 @@ function renderStudentDashboard() {
             <i class="fa-regular fa-calendar"></i> ครบกำหนด: ${item.dueDate}
           </div>
         </div>
-        ${userSub && userSub.status === 'Approved' ? `
-          <button class="btn btn-secondary" style="width:100%" disabled>
-            <i class="fa-solid fa-circle-check"></i> ชำระเงินเรียบร้อยแล้ว
-          </button>
-        ` : `
-          <button class="btn btn-primary" style="width:100%" onclick="openPaymentModal('${item.id}')">
-            <i class="fa-solid fa-qrcode"></i> ${userSub && userSub.status === 'Pending' ? 'ส่งสลิปแก้ไข' : 'ชำระเงิน / แนบสลิป'}
-          </button>
-        `}
+        <button class="btn btn-primary" style="width:100%" onclick="openPaymentModal('${item.id}')">
+          <i class="fa-solid fa-qrcode"></i> ชำระเงิน / แนบสลิป
+        </button>
       </div>
     `;
     grid.appendChild(card);
