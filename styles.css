@@ -865,12 +865,15 @@ body {
     font-size: 1.5rem;
   }
   .stats-grid {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 10px;
     width: 100%;
   }
   .stat-box {
     padding: 12px;
+    width: 100%;
+    min-width: unset;
   }
   .items-grid {
     grid-template-columns: 1fr;
@@ -878,6 +881,7 @@ body {
   }
   .app-container {
     padding: 1rem;
+    margin: 1rem auto;
   }
   .modal-content {
     width: 95%;
@@ -899,6 +903,20 @@ body {
   .toast {
     width: 100%;
     font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .user-info {
+    display: none !important;
+  }
+  .user-profile {
+    padding: 4px;
+    border-radius: 50%;
+  }
+  .nav-controls {
+    justify-content: flex-end;
+    gap: 8px;
   }
 }
 
