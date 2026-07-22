@@ -781,3 +781,13 @@ function sendLinePushMessage(userId, message) {
     Logger.log("LINE Bot push failed: " + e.toString());
   }
 }
+
+function testAdminNotification() {
+  const adminLineId = getAdminLineUserId();
+  Logger.log("Admin LINE User ID in Sheet: " + adminLineId);
+  if (!adminLineId) {
+    Logger.log("ไม่พบ LINE ID ของแอดมินรหัส 69010115 ในชีต 'รายชื่อนักศึกษา' กรุณาล็อกอินผ่านเว็บก่อน");
+    return;
+  }
+  sendLinePushMessage(adminLineId, "ทดสอบส่งแจ้งเตือนจากระบบ KMITL Pay! 🟢");
+}
