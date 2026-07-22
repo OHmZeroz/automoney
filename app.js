@@ -486,15 +486,33 @@ function logoutUser() {
 }
 
 function showMainApplication(user) {
-  document.getElementById('userName').textContent = user.name;
-  document.getElementById('userEmail').textContent = user.email;
-  document.getElementById('userAvatar').textContent = user.name.charAt(0);
-  document.getElementById('welcomeStudentName').textContent = user.name;
+  if (!user) return;
+  const name = user.name || ('นักศึกษา รหัส ' + (user.studentId || ''));
+  const displaySubtext = user.studentId || user.email || 'KMITL Student';
 
-  document.getElementById('loginSection').style.display = 'none';
-  document.getElementById('registerSection').style.display = 'none';
-  document.getElementById('mainAppSection').style.display = 'block';
-  document.getElementById('navControls').style.display = 'flex';
+  const userNameEl = document.getElementById('userName');
+  if (userNameEl) userNameEl.textContent = name;
+
+  const userEmailEl = document.getElementById('userEmail');
+  if (userEmailEl) userEmailEl.textContent = displaySubtext;
+
+  const userAvatarEl = document.getElementById('userAvatar');
+  if (userAvatarEl) userAvatarEl.textContent = name.trim().charAt(0).toUpperCase();
+
+  const welcomeStudentNameEl = document.getElementById('welcomeStudentName');
+  if (welcomeStudentNameEl) welcomeStudentNameEl.textContent = name;
+
+  const loginSec = document.getElementById('loginSection');
+  if (loginSec) loginSec.style.display = 'none';
+
+  const regSec = document.getElementById('registerSection');
+  if (regSec) regSec.style.display = 'none';
+
+  const mainSec = document.getElementById('mainAppSection');
+  if (mainSec) mainSec.style.display = 'block';
+
+  const navCtrl = document.getElementById('navControls');
+  if (navCtrl) navCtrl.style.display = 'flex';
 
   renderStudentDashboard();
 }
