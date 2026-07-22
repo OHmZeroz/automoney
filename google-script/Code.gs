@@ -23,6 +23,17 @@ const CONFIG = {
 };
 
 /**
+ * Helper to get current active spreadsheet or fallback by ID
+ */
+function getSpreadsheet() {
+  try {
+    const active = SpreadsheetApp.getActiveSpreadsheet();
+    if (active) return active;
+  } catch (e) {}
+  return SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+}
+
+/**
  * [สำคัญ] รันฟังก์ชันนี้ 1 ครั้งในหน้า Apps Script เพื่อให้ Google ขึ้นปุ่มปลดล็อกสิทธิ์ UrlFetchApp (LINE API)!
  */
 function authorizeExternalRequests() {
@@ -310,7 +321,7 @@ function fetchLineUserProfile(accessToken) {
  */
 function findStudentByLineUserId(lineUserId) {
   if (!lineUserId) return null;
-  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const ss = getSpreadsheet();
   const sheet = getStudentSheet(ss);
   if (!sheet) return null;
 
@@ -343,7 +354,7 @@ function findStudentByLineUserId(lineUserId) {
  * Link LINE User ID to official Student ID inside Sheet
  */
 function linkLineIdToStudent(lineUserId, studentId) {
-  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const ss = getSpreadsheet();
   const sheet = getStudentSheet(ss);
   if (!sheet) {
     return { status: 'error', message: 'ไม่พบชีตรายชื่อนักศึกษาในระบบ' };
@@ -403,7 +414,7 @@ function linkLineIdToStudent(lineUserId, studentId) {
  * Get student name by official Student ID or Name search
  */
 function getStudentNameById(studentId) {
-  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const ss = getSpreadsheet();
   const sheet = getStudentSheet(ss);
   if (!sheet) return null;
 
@@ -542,7 +553,7 @@ function saveSlipToDrive(studentIdOrEmail, feeName, base64Data) {
  * Get or Initialize Payments Sheet
  */
 function getOrCreatePaymentsSheet() {
-  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const ss = getSpreadsheet();
   let sheet = ss.getSheetByName(CONFIG.PAYMENTS_SHEET_NAME);
   
   if (!sheet) {
@@ -574,7 +585,7 @@ function createJsonResponse(obj) {
 }
 
 function updatePaymentStatusInSheet(studentId, feeName, status) {
-  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const ss = getSpreadsheet();
   const sheet = ss.getSheetByName(CONFIG.PAYMENTS_SHEET_NAME);
   if (!sheet) return { status: 'error', message: 'ไม่พบชีตรายการชำระเงิน' };
   
@@ -596,7 +607,7 @@ function updatePaymentStatusInSheet(studentId, feeName, status) {
  * Get or Initialize Fee Items Sheet (รายการเก็บเงิน)
  */
 function getOrCreateFeeItemsSheet() {
-  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const ss = getSpreadsheet();
   let sheet = ss.getSheetByName('รายการเก็บเงิน');
   if (!sheet) {
     sheet = ss.insertSheet('รายการเก็บเงิน');
@@ -628,7 +639,7 @@ function getOrCreateFeeItemsSheet() {
 
 function saveFeeItemToSheet(item) {
   if (!item) return { status: 'error', message: 'ไม่พบข้อมูล feeItem' };
-  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const ss = getSpreadsheet();
   let sheet = ss.getSheetByName('รายการเก็บเงิน');
   if (!sheet) {
     getOrCreateFeeItemsSheet();
@@ -648,7 +659,7 @@ function saveFeeItemToSheet(item) {
 }
 
 function deleteFeeItemFromSheet(feeId, feeName) {
-  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const ss = getSpreadsheet();
   const sheet = ss.getSheetByName('รายการเก็บเงิน');
   if (!sheet) return { status: 'error', message: 'ไม่พบชีตรายการเก็บเงิน' };
   
