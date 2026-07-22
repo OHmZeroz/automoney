@@ -827,23 +827,92 @@ body {
 
 /* Responsive Rules */
 @media (max-width: 768px) {
+  .navbar {
+    padding: 0.75rem 1rem;
+  }
   .nav-container {
     flex-direction: column;
     gap: 12px;
+    align-items: center;
+  }
+  .nav-controls {
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .user-profile {
+    padding: 4px 10px 4px 6px;
+    font-size: 0.8rem;
+  }
+  .user-avatar {
+    width: 28px;
+    height: 28px;
+  }
+  .user-info {
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .hero-section {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 20px;
-    padding: 1.5rem;
+    padding: 1.25rem;
+    text-align: center;
+  }
+  .hero-title h2 {
+    font-size: 1.5rem;
   }
   .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
     width: 100%;
   }
   .stat-box {
-    flex: 1;
+    padding: 12px;
   }
   .items-grid {
     grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .app-container {
+    padding: 1rem;
+  }
+  .modal-content {
+    width: 95%;
+    padding: 1.5rem;
+    margin: 10px auto;
+  }
+  .table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .data-table {
+    min-width: 600px;
+  }
+  .toast-container {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+  }
+  .toast {
+    width: 100%;
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .brand-text h1 {
+    font-size: 1rem;
+  }
+  .brand-logo {
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+  }
+  .view-tabs {
+    width: 100%;
+    overflow-x: auto;
   }
 }
