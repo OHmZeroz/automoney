@@ -1081,13 +1081,29 @@ function viewAdminSlip(subId) {
   document.getElementById('viewSlipModal').classList.add('active');
 }
 
-function updateStatus(subId, newStatus) {
+async function updateStatus(subId, newStatus) {
   const sub = submissions.find(s => s.id === subId);
   if (sub) {
     sub.status = newStatus;
     localStorage.setItem('kmitl_pay_submissions', JSON.stringify(submissions));
     renderAdminDashboard();
     showToast(`อัปเดตสถานะเป็น ${newStatus === 'Approved' ? 'อนุมัติ' : 'ปฏิเสธ'} เรียบร้อยแล้ว`, newStatus === 'Approved' ? 'success' : 'error');
+
+    // ส่งสถานะไปอัปเดตใน Google Sheet ด้วย
+    if (CONFIG.GOOGLE_SCRIPT_URL) {
+      try {
+        await postToGasReliable({
+          action: 'updatePaymentStatus',
+          studentId: sub.studentEmail || sub.studentId || '',
+          feeName: sub.feeName || '',
+          status: newStatus
+        });
+        showToast('อัปเดตสถานะใน Google Sheet เรียบร้อยแล้ว 🟢', 'success');
+      } catch (err) {
+        console.warn('Update status in Sheet error:', err);
+        showToast('อัปเดตสถานะใน Local สำเร็จ แต่ส่งไป Sheet ไม่สำเร็จ', 'error');
+      }
+    }
   }
 }
 
