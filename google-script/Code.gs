@@ -236,6 +236,7 @@ function doPost(e) {
       qrRef,
       remark
     ]);
+    SpreadsheetApp.flush();
 
     return createJsonResponse({
       status: 'success',
