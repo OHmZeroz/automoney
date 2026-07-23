@@ -895,6 +895,15 @@ body {
   .data-table {
     min-width: 600px;
   }
+  .data-table .btn-sm {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    min-height: 38px;
+    touch-action: manipulation;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
   .toast-container {
     left: 16px;
     right: 16px;
