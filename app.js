@@ -1159,13 +1159,26 @@ async function updateStatus(subId, newStatus) {
   renderAdminDashboard();
   showToast(`กำลังอัปเดตสถานะเป็น ${newStatus === 'Approved' ? 'อนุมัติ' : 'ปฏิเสธ'}...`, 'info');
 
-  // Send status update to Google Sheet
   if (CONFIG.GOOGLE_SCRIPT_URL) {
     try {
       const rowNumber = subId.startsWith('gas-') ? parseInt(subId.split('-')[1]) + 2 : '';
-      let updateSuccess = false;
 
-      // Method 1: Try GET request first (returns JSON status)
+      // Method 1: Send POST request via postToGasReliable (no-cors)
+      try {
+        await postToGasReliable({
+          action: 'updatePaymentStatus',
+          studentId: sub.studentEmail || sub.studentId || '',
+          studentName: sub.studentName || '',
+          feeName: sub.feeName || '',
+          status: newStatus,
+          amount: sub.amount || 0,
+          rowNumber: rowNumber
+        });
+      } catch (postErr) {
+        console.warn('POST update status warning:', postErr);
+      }
+
+      // Method 2: Send GET request as secondary channel
       try {
         const params = new URLSearchParams({
           action: 'updatePaymentStatus',
@@ -1178,31 +1191,10 @@ async function updateStatus(subId, newStatus) {
           t: Date.now()
         });
         const url = CONFIG.GOOGLE_SCRIPT_URL + (CONFIG.GOOGLE_SCRIPT_URL.includes('?') ? '&' : '?') + params.toString();
+        fetch(url, { mode: 'no-cors' }).catch(e => console.warn('GET update status warning:', e));
+      } catch (getErr) {}
 
-        const response = await fetch(url);
-        const result = await response.json();
-
-        if (result && result.status === 'success') {
-          showToast(`อัปเดตสถานะใน Google Sheet เรียบร้อยแล้ว 🟢 ${result.message || ''}`, 'success');
-          updateSuccess = true;
-        }
-      } catch (getErr) {
-        console.warn('GET update status warning, attempting fallback POST:', getErr);
-      }
-
-      // Method 2: Fallback to reliable POST if GET is blocked by CORS/Redirect
-      if (!updateSuccess) {
-        await postToGasReliable({
-          action: 'updatePaymentStatus',
-          studentId: sub.studentEmail || sub.studentId || '',
-          feeName: sub.feeName || '',
-          status: newStatus,
-          amount: sub.amount || 0,
-          rowNumber: rowNumber,
-          studentName: sub.studentName || ''
-        });
-        showToast('ส่งคำขออัปเดตสถานะลง Google Sheet เรียบร้อยแล้ว 🟢', 'success');
-      }
+      showToast('อัปเดตสถานะใน Google Sheet เรียบร้อยแล้ว 🟢', 'success');
 
       // Re-fetch from Sheet after a short delay to confirm sync
       setTimeout(fetchSubmissionsFromGas, 2500);

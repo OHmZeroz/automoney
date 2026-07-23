@@ -708,47 +708,66 @@ function updatePaymentStatusInSheet(studentId, feeName, status, rowNumber, times
   
   const lastRow = sheet.getLastRow();
   
-  // 1. ถ้ามี rowNumber และตรงกับขอบเขตตาราง ให้จัดการอัปเดตโดยตรงทันที (Direct Update)
-  if (rowNumber && rowNumber >= 2 && rowNumber <= lastRow) {
-    sheet.getRange(rowNumber, 6).setValue(status);
-    SpreadsheetApp.flush();
-    return { status: 'success', message: 'อัปเดตสถานะแถวที่ ' + rowNumber + ' เป็น ' + status + ' เรียบร้อยแล้ว (Direct)' };
-  }
-  
-  // 2. ถ้าไม่มี rowNumber ให้ค้นหาแถวแบบยืดหยุ่น (Loose Search)
-  const data = sheet.getDataRange().getValues();
-  let matchIndex = -1;
-  let fallbackIndex = -1;
-  
-  const cleanSearchName = studentName ? studentName.toString().replace(/\s+/g, '').toLowerCase() : '';
-  const cleanSearchId = studentId ? studentId.toString().replace(/\s+/g, '').toLowerCase() : '';
-  const cleanSearchFee = feeName ? feeName.toString().replace(/\s+/g, '').toLowerCase() : '';
-
-  for (let i = 1; i < data.length; i++) {
-    const sheetName = data[i][1] ? data[i][1].toString().replace(/\s+/g, '').toLowerCase() : '';
-    const sheetId = data[i][2] ? data[i][2].toString().replace(/\s+/g, '').toLowerCase() : '';
-    const sheetFee = data[i][3] ? data[i][3].toString().replace(/\s+/g, '').toLowerCase() : '';
-    const sheetStatus = data[i][5] ? data[i][5].toString().trim() : '';
-    
-    const nameMatches = cleanSearchName && (sheetName.includes(cleanSearchName) || cleanSearchName.includes(sheetName));
-    const idMatches = cleanSearchId && (sheetId.includes(cleanSearchId) || cleanSearchId.includes(sheetId));
-    const feeMatches = !cleanSearchFee || sheetFee.includes(cleanSearchFee) || cleanSearchFee.includes(sheetFee);
-    
-    if ((nameMatches || idMatches || feeMatches) && (nameMatches || idMatches || !cleanSearchName)) {
-      if (sheetStatus === 'Pending' || sheetStatus === 'รอตรวจสอบ') {
-        matchIndex = i;
-        break; 
-      } else {
-        fallbackIndex = i;
-      }
+  // 1. ถ้ามี rowNumber และตรงกับขอบเขตตาราง ให้จัดการอัปเดตโดยตรงทันที (Direct Update - 100% Exact)
+  if (rowNumber) {
+    const rNum = parseInt(rowNumber);
+    if (!isNaN(rNum) && rNum >= 2 && rNum <= lastRow) {
+      sheet.getRange(rNum, 6).setValue(status);
+      SpreadsheetApp.flush();
+      return { status: 'success', message: 'อัปเดตสถานะแถวที่ ' + rNum + ' เป็น ' + status + ' เรียบร้อยแล้ว (Direct)' };
     }
   }
   
-  const finalIndex = matchIndex !== -1 ? matchIndex : fallbackIndex;
-  if (finalIndex !== -1) {
-    sheet.getRange(finalIndex + 1, 6).setValue(status);
+  // 2. ถ้าไม่มี rowNumber ให้ค้นหาแบบหลวม (Ultra-Smart Fallback Search)
+  const data = sheet.getDataRange().getValues();
+  
+  const cleanSearchId = studentId ? studentId.toString().replace(/[^0-9a-zA-Z]/g, '').trim().toLowerCase() : '';
+  const cleanSearchName = studentName ? studentName.toString().replace(/\s+/g, '').trim().toLowerCase() : '';
+  const cleanSearchFee = feeName ? feeName.toString().replace(/\s+/g, '').trim().toLowerCase() : '';
+
+  let pendingMatchIndex = -1;
+  let anyMatchIndex = -1;
+
+  for (let i = 1; i < data.length; i++) {
+    const rowName = data[i][1] ? data[i][1].toString().trim() : '';
+    const rowId = data[i][2] ? data[i][2].toString().trim() : '';
+    const rowFee = data[i][3] ? data[i][3].toString().trim() : '';
+    const rowStatus = data[i][5] ? data[i][5].toString().trim() : '';
+    
+    const cleanRowId = rowId.replace(/[^0-9a-zA-Z]/g, '').trim().toLowerCase();
+    const cleanRowName = rowName.replace(/\s+/g, '').trim().toLowerCase();
+    const cleanRowFee = rowFee.replace(/\s+/g, '').trim().toLowerCase();
+    
+    // Check ID match or Name match
+    const idMatches = cleanSearchId && cleanRowId && (cleanRowId === cleanSearchId || cleanRowId.includes(cleanSearchId) || cleanSearchId.includes(cleanRowId));
+    const nameMatches = cleanSearchName && cleanRowName && (cleanRowName.includes(cleanSearchName) || cleanSearchName.includes(cleanRowName));
+    const feeMatches = !cleanSearchFee || !cleanRowFee || cleanRowFee.includes(cleanSearchFee) || cleanSearchFee.includes(cleanRowFee);
+
+    // High priority: ID or Name matches AND Fee matches
+    if ((idMatches || nameMatches) && feeMatches) {
+      if (rowStatus === 'Pending' || rowStatus === 'รอตรวจสอบ' || !rowStatus) {
+        pendingMatchIndex = i;
+        break; // Found pending row for this student & fee, stop immediately!
+      } else {
+        anyMatchIndex = i;
+      }
+    }
+    // Medium priority: ID or Name matches (even if fee string differs slightly)
+    else if (idMatches || nameMatches) {
+      if (pendingMatchIndex === -1 && (rowStatus === 'Pending' || rowStatus === 'รอตรวจสอบ' || !rowStatus)) {
+        pendingMatchIndex = i;
+      } else if (anyMatchIndex === -1) {
+        anyMatchIndex = i;
+      }
+    }
+  }
+
+  const targetIndex = pendingMatchIndex !== -1 ? pendingMatchIndex : anyMatchIndex;
+  
+  if (targetIndex !== -1) {
+    sheet.getRange(targetIndex + 1, 6).setValue(status);
     SpreadsheetApp.flush();
-    return { status: 'success', message: 'อัปเดตสถานะแถวที่ ' + (finalIndex + 1) + ' เป็น ' + status + ' เรียบร้อยแล้ว' };
+    return { status: 'success', message: 'อัปเดตสถานะแถวที่ ' + (targetIndex + 1) + ' เป็น ' + status + ' เรียบร้อยแล้ว' };
   }
   
   return { status: 'error', message: 'ไม่พบแถวรายการชำระเงินที่ระบุใน Google Sheet' };
