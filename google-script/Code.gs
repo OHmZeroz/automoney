@@ -248,7 +248,10 @@ function doPost(e) {
       const feeName = contents.feeName;
       const status = contents.status;
       const amount = contents.amount || 0;
-      const result = updatePaymentStatusInSheet(studentId, feeName, status);
+      const rowNumber = contents.rowNumber;
+      const timestamp = contents.timestamp;
+      const studentName = contents.studentName;
+      const result = updatePaymentStatusInSheet(studentId, feeName, status, rowNumber, timestamp, studentName);
 
       // If Approved, mark the student roster sheet with payment info
       if (status === 'Approved') {
@@ -659,29 +662,69 @@ function createJsonResponse(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-function updatePaymentStatusInSheet(studentId, feeName, status) {
+function updatePaymentStatusInSheet(studentId, feeName, status, rowNumber, timestamp, studentName) {
   const ss = getSpreadsheet();
   const sheet = ss.getSheetByName(CONFIG.PAYMENTS_SHEET_NAME);
   if (!sheet) return { status: 'error', message: 'ไม่พบชีตรายการชำระเงิน' };
   
-  const data = sheet.getDataRange().getValues();
+  const lastRow = sheet.getLastRow();
   
+  // 1. ลองอัปเดตด้วย rowNumber ดูก่อน (ถ้ามี และตรวจข้อมูลแล้วตรงกัน)
+  if (rowNumber && rowNumber >= 2 && rowNumber <= lastRow) {
+    const rowValues = sheet.getRange(rowNumber, 1, 1, 9).getValues()[0];
+    const sheetName = rowValues[1] ? rowValues[1].toString().trim() : '';
+    const sheetFee = rowValues[3] ? rowValues[3].toString().trim() : '';
+    
+    const matchName = !studentName || sheetName.toLowerCase() === studentName.toString().trim().toLowerCase();
+    const matchFee = !feeName || sheetFee.toLowerCase() === feeName.toString().trim().toLowerCase();
+    
+    if (matchFee && matchName) {
+      sheet.getRange(rowNumber, 6).setValue(status);
+      SpreadsheetApp.flush();
+      return { status: 'success', message: 'อัปเดตสถานะแถวที่ ' + rowNumber + ' เป็น ' + status + ' เรียบร้อยแล้ว (Direct)' };
+    }
+  }
+  
+  // 2. ถ้าไม่ตรง หรือไม่มี rowNumber ให้ค้นหา
+  const data = sheet.getDataRange().getValues();
+  let matchIndex = -1;
+  let fallbackIndex = -1;
+  
+  const cleanSearchName = studentName ? studentName.toString().trim().toLowerCase() : '';
   const cleanSearchId = studentId ? studentId.toString().split('.')[0].replace(/[^0-9a-zA-Z]/g, '').trim().toLowerCase() : '';
   const cleanSearchFee = feeName ? feeName.toString().replace(/\s+/g, '').trim().toLowerCase() : '';
 
   for (let i = 1; i < data.length; i++) {
-    const rowId = data[i][2] ? data[i][2].toString().trim() : '';
-    const rowFee = data[i][3] ? data[i][3].toString().trim() : '';
+    const sheetName = data[i][1] ? data[i][1].toString().trim() : '';
+    const sheetId = data[i][2] ? data[i][2].toString().trim() : '';
+    const sheetFee = data[i][3] ? data[i][3].toString().trim() : '';
+    const sheetStatus = data[i][5] ? data[i][5].toString().trim() : '';
     
-    const cleanRowId = rowId.split('.')[0].replace(/[^0-9a-zA-Z]/g, '').trim().toLowerCase();
-    const cleanRowFee = rowFee.replace(/\s+/g, '').trim().toLowerCase();
+    const cleanSheetName = sheetName.replace(/\s+/g, '').toLowerCase();
+    const cleanSheetId = sheetId.split('.')[0].replace(/[^0-9a-zA-Z]/g, '').trim().toLowerCase();
+    const cleanSheetFee = sheetFee.replace(/\s+/g, '').toLowerCase();
     
-    if ((!cleanSearchId || cleanRowId === cleanSearchId) && (!cleanSearchFee || cleanRowFee === cleanSearchFee)) {
-      sheet.getRange(i + 1, 6).setValue(status);
-      SpreadsheetApp.flush();
-      return { status: 'success', message: 'อัปเดตสถานะเป็น ' + status + ' เรียบร้อยแล้ว' };
+    const nameMatches = cleanSearchName && cleanSheetName === cleanSearchName.replace(/\s+/g, '');
+    const idMatches = cleanSearchId && cleanSheetId === cleanSearchId;
+    const feeMatches = cleanSearchFee && cleanSheetFee === cleanSearchFee;
+    
+    if ((nameMatches || idMatches) && feeMatches) {
+      if (sheetStatus === 'Pending') {
+        matchIndex = i;
+        break; 
+      } else {
+        fallbackIndex = i;
+      }
     }
   }
+  
+  const finalIndex = matchIndex !== -1 ? matchIndex : fallbackIndex;
+  if (finalIndex !== -1) {
+    sheet.getRange(finalIndex + 1, 6).setValue(status);
+    SpreadsheetApp.flush();
+    return { status: 'success', message: 'อัปเดตสถานะเป็น ' + status + ' เรียบร้อยแล้ว' };
+  }
+  
   return { status: 'error', message: 'ไม่พบแถวรายการชำระเงินที่ระบุ' };
 }
 
@@ -999,4 +1042,38 @@ function markStudentPaymentInRoster(studentId, feeName, amount) {
   }
   
   Logger.log('markStudentPaymentInRoster: Student ID ' + studentId + ' not found in roster');
+}
+
+/**
+ * [รันครั้งเดียว] Backfill: สแกนรายการชำระเงินที่ Approved ทั้งหมดแล้ว mark ในใบรายชื่อนักศึกษา
+ * ใช้สำหรับรายการที่ถูก Approve ก่อนที่จะมีฟีเจอร์ markStudentPaymentInRoster
+ */
+function backfillApprovedPayments() {
+  const ss = getSpreadsheet();
+  const paySheet = ss.getSheetByName(CONFIG.PAYMENTS_SHEET_NAME);
+  if (!paySheet) {
+    Logger.log('backfillApprovedPayments: Payments sheet not found');
+    return;
+  }
+  
+  const data = paySheet.getDataRange().getValues();
+  let count = 0;
+  
+  // Column layout: 0=วันเวลา, 1=ชื่อ, 2=รหัส/อีเมล, 3=รายการ, 4=จำนวนเงิน, 5=สถานะ
+  for (let i = 1; i < data.length; i++) {
+    const status = data[i][5] ? data[i][5].toString().trim() : '';
+    if (status !== 'Approved') continue;
+    
+    const studentId = data[i][2] ? data[i][2].toString().trim() : '';
+    const feeName = data[i][3] ? data[i][3].toString().trim() : '';
+    const amount = parseFloat(data[i][4]) || 0;
+    
+    if (!studentId || !feeName) continue;
+    
+    Logger.log('Backfill: ' + studentId + ' -> ' + feeName + ' = ' + amount);
+    markStudentPaymentInRoster(studentId, feeName, amount);
+    count++;
+  }
+  
+  Logger.log('backfillApprovedPayments completed: ' + count + ' records processed');
 }

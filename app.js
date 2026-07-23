@@ -94,6 +94,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
+function normalizeStatus(st) {
+  if (!st) return 'Pending';
+  const str = st.toString().trim().toLowerCase();
+  if (str.includes('approved') || str.includes('อนุมัติ') || str.includes('ชำระแล้ว') || str.includes('paid')) {
+    return 'Approved';
+  }
+  if (str.includes('reject') || str.includes('ปฏิเสธ') || str.includes('ไม่อนุมัติ')) {
+    return 'Rejected';
+  }
+  return 'Pending';
+}
+
 async function fetchSubmissionsFromGas() {
   if (!CONFIG.GOOGLE_SCRIPT_URL) return;
   try {
@@ -108,7 +120,7 @@ async function fetchSubmissionsFromGas() {
         studentEmail: row['ข้อมูลประจำตัว/รหัส'] ? row['ข้อมูลประจำตัว/รหัส'].toString() : '',
         feeName: row['รายการชำระเงิน'] ? row['รายการชำระเงิน'].toString() : '',
         amount: parseFloat(row['จำนวนเงิน (บาท)']) || 0,
-        status: row['สถานะ'] ? row['สถานะ'].toString() : 'Pending',
+        status: row['สถานะ'] ? normalizeStatus(row['สถานะ']) : 'Pending',
         slipUrl: row['ลิงก์สลิปใน Google Drive'] ? row['ลิงก์สลิปใน Google Drive'].toString() : 'https://drive.google.com/drive/folders/1vVmoWgVS3V0ASdY3TYhSY76kgFYjBV57',
         qrRef: row['ข้อมูล QR Ref บนสลิป'] ? row['ข้อมูล QR Ref บนสลิป'].toString() : '',
         remark: row['หมายเหตุ'] ? row['หมายเหตุ'].toString() : ''
@@ -644,8 +656,8 @@ function renderStudentDashboard() {
   feeItems.forEach(item => {
     // Submissions related to this fee for this user
     const relatedSubs = userSubsAll.filter(s => s.feeName === item.name || s.feeId === item.id);
-    const approvedSubs = relatedSubs.filter(s => s.status === 'Approved');
-    const pendingSubs = relatedSubs.filter(s => s.status === 'Pending');
+    const approvedSubs = relatedSubs.filter(s => normalizeStatus(s.status) === 'Approved');
+    const pendingSubs = relatedSubs.filter(s => normalizeStatus(s.status) === 'Pending');
 
     const paidAmount = approvedSubs.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
     paidTotal += paidAmount;
@@ -713,10 +725,11 @@ function renderStudentHistoryTable() {
   }
 
   userSubs.forEach(sub => {
+    const normStatus = normalizeStatus(sub.status);
     let statusClass = 'badge-unpaid';
     let statusText = 'ไม่ผ่าน';
-    if (sub.status === 'Approved') { statusClass = 'badge-paid'; statusText = 'อนุมัติเรียบร้อย'; }
-    else if (sub.status === 'Pending') { statusClass = 'badge-pending'; statusText = 'รอเหรัญญิกตรวจ'; }
+    if (normStatus === 'Approved') { statusClass = 'badge-paid'; statusText = 'อนุมัติเรียบร้อย'; }
+    else if (normStatus === 'Pending') { statusClass = 'badge-pending'; statusText = 'รอเหรัญญิกตรวจ'; }
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -1075,10 +1088,14 @@ function renderAdminSubmissionsTable() {
   }
 
   submissions.forEach(sub => {
+    const normStatus = normalizeStatus(sub.status);
     let statusClass = 'badge-pending';
     let statusText = 'รอตรวจสอบ';
-    if (sub.status === 'Approved') { statusClass = 'badge-paid'; statusText = 'อนุมัติแล้ว'; }
-    else if (sub.status === 'Rejected') { statusClass = 'badge-unpaid'; statusText = 'ปฏิเสธแล้ว'; }
+    if (normStatus === 'Approved') { statusClass = 'badge-paid'; statusText = 'อนุมัติแล้ว'; }
+    else if (normStatus === 'Rejected') { statusClass = 'badge-unpaid'; statusText = 'ปฏิเสธแล้ว'; }
+
+    const isApproved = normStatus === 'Approved';
+    const isRejected = normStatus === 'Rejected';
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -1097,11 +1114,11 @@ function renderAdminSubmissionsTable() {
       <td><span class="fee-badge ${statusClass}">${statusText}</span></td>
       <td>
         <div style="display:flex; gap:6px;">
-          <button class="btn btn-success btn-sm" onclick="updateStatus('${sub.id}', 'Approved')" ${sub.status !== 'Pending' ? 'disabled' : ''}>
-            <i class="fa-solid fa-check"></i> อนุมัติ
+          <button class="btn btn-success btn-sm" onclick="updateStatus('${sub.id}', 'Approved')" ${isApproved ? 'disabled' : ''}>
+            <i class="fa-solid fa-check"></i> ${isApproved ? 'อนุมัติแล้ว' : 'อนุมัติ'}
           </button>
-          <button class="btn btn-danger btn-sm" onclick="updateStatus('${sub.id}', 'Rejected')" ${sub.status !== 'Pending' ? 'disabled' : ''}>
-            <i class="fa-solid fa-xmark"></i> ไม่อนุมัติ
+          <button class="btn btn-danger btn-sm" onclick="updateStatus('${sub.id}', 'Rejected')" ${isRejected ? 'disabled' : ''}>
+            <i class="fa-solid fa-xmark"></i> ${isRejected ? 'ปฏิเสธแล้ว' : 'ไม่อนุมัติ'}
           </button>
         </div>
       </td>
@@ -1142,12 +1159,16 @@ async function updateStatus(subId, newStatus) {
     // ส่งสถานะไปอัปเดตใน Google Sheet ด้วย
     if (CONFIG.GOOGLE_SCRIPT_URL) {
       try {
+        const rowNumber = subId.startsWith('gas-') ? parseInt(subId.split('-')[1]) + 2 : null;
         await postToGasReliable({
           action: 'updatePaymentStatus',
           studentId: sub.studentEmail || sub.studentId || '',
           feeName: sub.feeName || '',
           status: newStatus,
-          amount: sub.amount || 0
+          amount: sub.amount || 0,
+          rowNumber: rowNumber,
+          timestamp: sub.timestamp || '',
+          studentName: sub.studentName || ''
         });
         showToast('อัปเดตสถานะใน Google Sheet เรียบร้อยแล้ว 🟢', 'success');
       } catch (err) {
