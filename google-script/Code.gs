@@ -862,10 +862,11 @@ function getAdminLineUserId() {
 
   if (idColIdx === -1 || lineColIdx === -1) return null;
 
+  const adminIds = ['69010115', '69010165'];
   for (let i = 1; i < data.length; i++) {
     if (!data[i][idColIdx]) continue;
     const cleanRowId = data[i][idColIdx].toString().split('.')[0].replace(/[^0-9a-zA-Z]/g, '').trim();
-    if (cleanRowId === '69010115') {
+    if (adminIds.includes(cleanRowId)) {
       return data[i][lineColIdx] ? data[i][lineColIdx].toString().trim() : null;
     }
   }
@@ -909,7 +910,7 @@ function testAdminNotification() {
   const adminLineId = getAdminLineUserId();
   Logger.log("Admin LINE User ID in Sheet: " + adminLineId);
   if (!adminLineId) {
-    Logger.log("ไม่พบ LINE ID ของแอดมินรหัส 69010115 ในชีต 'รายชื่อนักศึกษา' กรุณาล็อกอินผ่านเว็บก่อน");
+    Logger.log("ไม่พบ LINE ID ของแอดมินรหัส 69010115 หรือ 69010165 ในชีต 'รายชื่อนักศึกษา' กรุณาล็อกอินผ่านเว็บก่อน");
     return;
   }
   sendLinePushMessage(adminLineId, "ทดสอบส่งแจ้งเตือนจากระบบ KMITL Pay! 🟢");

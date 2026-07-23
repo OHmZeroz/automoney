@@ -18,13 +18,14 @@
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 
   <script>
-    // Security check to restrict admin page access to 69010115 only
+    // Security check to restrict admin page access to authorized admins only (69010115, 69010165)
     (function() {
       const savedUser = localStorage.getItem('kmitl_pay_user');
       if (savedUser) {
         try {
           const user = JSON.parse(savedUser);
-          if (user.studentId && user.studentId.toString().trim() === '69010115') {
+          const adminIds = ['69010115', '69010165'];
+          if (user.studentId && adminIds.includes(user.studentId.toString().trim())) {
             return; // Authorized!
           }
         } catch (e) {}

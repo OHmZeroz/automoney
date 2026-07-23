@@ -593,7 +593,8 @@ function showMainApplication(user) {
 
   const navAdminLink = document.getElementById('navAdminLink');
   if (navAdminLink) {
-    if (user.studentId && user.studentId.toString().trim() === '69010115') {
+    const adminIds = ['69010115', '69010165'];
+    if (user.studentId && adminIds.includes(user.studentId.toString().trim())) {
       navAdminLink.style.display = 'inline-flex';
     } else {
       navAdminLink.style.display = 'none';
