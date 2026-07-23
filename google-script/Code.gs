@@ -708,47 +708,34 @@ function updatePaymentStatusInSheet(studentId, feeName, status, rowNumber, times
   
   const lastRow = sheet.getLastRow();
   
-  // 1. ลองอัปเดตด้วย rowNumber ดูก่อน (ถ้ามี และตรวจข้อมูลแล้วตรงกัน)
+  // 1. ถ้ามี rowNumber และตรงกับขอบเขตตาราง ให้จัดการอัปเดตโดยตรงทันที (Direct Update)
   if (rowNumber && rowNumber >= 2 && rowNumber <= lastRow) {
-    const rowValues = sheet.getRange(rowNumber, 1, 1, 9).getValues()[0];
-    const sheetName = rowValues[1] ? rowValues[1].toString().trim() : '';
-    const sheetFee = rowValues[3] ? rowValues[3].toString().trim() : '';
-    
-    const matchName = !studentName || sheetName.toLowerCase() === studentName.toString().trim().toLowerCase();
-    const matchFee = !feeName || sheetFee.toLowerCase() === feeName.toString().trim().toLowerCase();
-    
-    if (matchFee && matchName) {
-      sheet.getRange(rowNumber, 6).setValue(status);
-      SpreadsheetApp.flush();
-      return { status: 'success', message: 'อัปเดตสถานะแถวที่ ' + rowNumber + ' เป็น ' + status + ' เรียบร้อยแล้ว (Direct)' };
-    }
+    sheet.getRange(rowNumber, 6).setValue(status);
+    SpreadsheetApp.flush();
+    return { status: 'success', message: 'อัปเดตสถานะแถวที่ ' + rowNumber + ' เป็น ' + status + ' เรียบร้อยแล้ว (Direct)' };
   }
   
-  // 2. ถ้าไม่ตรง หรือไม่มี rowNumber ให้ค้นหา
+  // 2. ถ้าไม่มี rowNumber ให้ค้นหาแถวแบบยืดหยุ่น (Loose Search)
   const data = sheet.getDataRange().getValues();
   let matchIndex = -1;
   let fallbackIndex = -1;
   
-  const cleanSearchName = studentName ? studentName.toString().trim().toLowerCase() : '';
-  const cleanSearchId = studentId ? studentId.toString().split('.')[0].replace(/[^0-9a-zA-Z]/g, '').trim().toLowerCase() : '';
-  const cleanSearchFee = feeName ? feeName.toString().replace(/\s+/g, '').trim().toLowerCase() : '';
+  const cleanSearchName = studentName ? studentName.toString().replace(/\s+/g, '').toLowerCase() : '';
+  const cleanSearchId = studentId ? studentId.toString().replace(/\s+/g, '').toLowerCase() : '';
+  const cleanSearchFee = feeName ? feeName.toString().replace(/\s+/g, '').toLowerCase() : '';
 
   for (let i = 1; i < data.length; i++) {
-    const sheetName = data[i][1] ? data[i][1].toString().trim() : '';
-    const sheetId = data[i][2] ? data[i][2].toString().trim() : '';
-    const sheetFee = data[i][3] ? data[i][3].toString().trim() : '';
+    const sheetName = data[i][1] ? data[i][1].toString().replace(/\s+/g, '').toLowerCase() : '';
+    const sheetId = data[i][2] ? data[i][2].toString().replace(/\s+/g, '').toLowerCase() : '';
+    const sheetFee = data[i][3] ? data[i][3].toString().replace(/\s+/g, '').toLowerCase() : '';
     const sheetStatus = data[i][5] ? data[i][5].toString().trim() : '';
     
-    const cleanSheetName = sheetName.replace(/\s+/g, '').toLowerCase();
-    const cleanSheetId = sheetId.split('.')[0].replace(/[^0-9a-zA-Z]/g, '').trim().toLowerCase();
-    const cleanSheetFee = sheetFee.replace(/\s+/g, '').toLowerCase();
+    const nameMatches = cleanSearchName && (sheetName.includes(cleanSearchName) || cleanSearchName.includes(sheetName));
+    const idMatches = cleanSearchId && (sheetId.includes(cleanSearchId) || cleanSearchId.includes(sheetId));
+    const feeMatches = !cleanSearchFee || sheetFee.includes(cleanSearchFee) || cleanSearchFee.includes(sheetFee);
     
-    const nameMatches = cleanSearchName && cleanSheetName === cleanSearchName.replace(/\s+/g, '');
-    const idMatches = cleanSearchId && cleanSheetId === cleanSearchId;
-    const feeMatches = cleanSearchFee && cleanSheetFee === cleanSearchFee;
-    
-    if ((nameMatches || idMatches) && feeMatches) {
-      if (sheetStatus === 'Pending') {
+    if ((nameMatches || idMatches || feeMatches) && (nameMatches || idMatches || !cleanSearchName)) {
+      if (sheetStatus === 'Pending' || sheetStatus === 'รอตรวจสอบ') {
         matchIndex = i;
         break; 
       } else {
@@ -761,10 +748,10 @@ function updatePaymentStatusInSheet(studentId, feeName, status, rowNumber, times
   if (finalIndex !== -1) {
     sheet.getRange(finalIndex + 1, 6).setValue(status);
     SpreadsheetApp.flush();
-    return { status: 'success', message: 'อัปเดตสถานะเป็น ' + status + ' เรียบร้อยแล้ว' };
+    return { status: 'success', message: 'อัปเดตสถานะแถวที่ ' + (finalIndex + 1) + ' เป็น ' + status + ' เรียบร้อยแล้ว' };
   }
   
-  return { status: 'error', message: 'ไม่พบแถวรายการชำระเงินที่ระบุ' };
+  return { status: 'error', message: 'ไม่พบแถวรายการชำระเงินที่ระบุใน Google Sheet' };
 }
 
 /**

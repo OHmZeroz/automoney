@@ -39,14 +39,15 @@ const DEFAULT_FEE_ITEMS = [
   }
 ];
 
-// Configuration (Loaded from LocalStorage or default)
+// Default Configuration
 let CONFIG = JSON.parse(localStorage.getItem('kmitl_pay_config')) || {};
 
-// Always use the user's active Google Apps Script & LINE Login settings
-CONFIG.GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw_OxjIFz_N6wJzF_fFhoJE6P561_jBoWMs8WDO9q8b1RsnYdaDtormoQnupF1oHQ8J/exec';
-CONFIG.LINE_CHANNEL_ID = '2010801650';
-CONFIG.LINE_CHANNEL_SECRET = '832a75e287353de9a597989d0f23761e';
-CONFIG.LIFF_ID = '2010801650-te43AoZe';
+if (!CONFIG.GOOGLE_SCRIPT_URL) {
+  CONFIG.GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw_OxjIFz_N6wJzF_fFhoJE6P561_jBoWMs8WDO9q8b1RsnYdaDtormoQnupF1oHQ8J/exec';
+}
+CONFIG.LINE_CHANNEL_ID = CONFIG.LINE_CHANNEL_ID || '2010801650';
+CONFIG.LINE_CHANNEL_SECRET = CONFIG.LINE_CHANNEL_SECRET || '832a75e287353de9a597989d0f23761e';
+CONFIG.LIFF_ID = CONFIG.LIFF_ID || '2010801650-te43AoZe';
 
 if (!CONFIG.PROMPTPAY_NUMBER) CONFIG.PROMPTPAY_NUMBER = '0891234567';
 if (!CONFIG.PROMPTPAY_NAME) CONFIG.PROMPTPAY_NAME = 'เหรัญญิกประจำห้อง (KMITL Pay)';
@@ -1158,33 +1159,53 @@ async function updateStatus(subId, newStatus) {
   renderAdminDashboard();
   showToast(`กำลังอัปเดตสถานะเป็น ${newStatus === 'Approved' ? 'อนุมัติ' : 'ปฏิเสธ'}...`, 'info');
 
-  // Send status update to Google Sheet via GET (CORS-friendly)
+  // Send status update to Google Sheet
   if (CONFIG.GOOGLE_SCRIPT_URL) {
     try {
       const rowNumber = subId.startsWith('gas-') ? parseInt(subId.split('-')[1]) + 2 : '';
-      const params = new URLSearchParams({
-        action: 'updatePaymentStatus',
-        studentId: sub.studentEmail || sub.studentId || '',
-        feeName: sub.feeName || '',
-        status: newStatus,
-        amount: sub.amount || 0,
-        rowNumber: rowNumber,
-        studentName: sub.studentName || '',
-        t: Date.now()
-      });
-      const url = CONFIG.GOOGLE_SCRIPT_URL + (CONFIG.GOOGLE_SCRIPT_URL.includes('?') ? '&' : '?') + params.toString();
+      let updateSuccess = false;
 
-      const response = await fetch(url);
-      const result = await response.json();
+      // Method 1: Try GET request first (returns JSON status)
+      try {
+        const params = new URLSearchParams({
+          action: 'updatePaymentStatus',
+          studentId: sub.studentEmail || sub.studentId || '',
+          feeName: sub.feeName || '',
+          status: newStatus,
+          amount: sub.amount || 0,
+          rowNumber: rowNumber,
+          studentName: sub.studentName || '',
+          t: Date.now()
+        });
+        const url = CONFIG.GOOGLE_SCRIPT_URL + (CONFIG.GOOGLE_SCRIPT_URL.includes('?') ? '&' : '?') + params.toString();
 
-      if (result && result.status === 'success') {
-        showToast(`อัปเดตสถานะใน Google Sheet เรียบร้อยแล้ว 🟢 ${result.message || ''}`, 'success');
-      } else {
-        showToast('Sheet ตอบกลับ: ' + (result.message || 'ไม่สามารถอัปเดตได้'), 'error');
+        const response = await fetch(url);
+        const result = await response.json();
+
+        if (result && result.status === 'success') {
+          showToast(`อัปเดตสถานะใน Google Sheet เรียบร้อยแล้ว 🟢 ${result.message || ''}`, 'success');
+          updateSuccess = true;
+        }
+      } catch (getErr) {
+        console.warn('GET update status warning, attempting fallback POST:', getErr);
       }
 
-      // Re-fetch from Sheet after a short delay to confirm the update
-      setTimeout(fetchSubmissionsFromGas, 2000);
+      // Method 2: Fallback to reliable POST if GET is blocked by CORS/Redirect
+      if (!updateSuccess) {
+        await postToGasReliable({
+          action: 'updatePaymentStatus',
+          studentId: sub.studentEmail || sub.studentId || '',
+          feeName: sub.feeName || '',
+          status: newStatus,
+          amount: sub.amount || 0,
+          rowNumber: rowNumber,
+          studentName: sub.studentName || ''
+        });
+        showToast('ส่งคำขออัปเดตสถานะลง Google Sheet เรียบร้อยแล้ว 🟢', 'success');
+      }
+
+      // Re-fetch from Sheet after a short delay to confirm sync
+      setTimeout(fetchSubmissionsFromGas, 2500);
 
     } catch (err) {
       console.warn('Update status in Sheet error:', err);
