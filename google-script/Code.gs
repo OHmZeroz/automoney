@@ -166,12 +166,18 @@ function doGet(e) {
 
       const result = updatePaymentStatusInSheet(studentId, feeName, status, rowNumber, null, studentName);
 
-      // If Approved, mark the student roster sheet with payment info
+      // If Approved, mark the student roster sheet (Sheet 1) with payment info
       if (status === 'Approved') {
         try {
           markStudentPaymentInRoster(studentId, feeName, amount);
         } catch (err) {
           Logger.log('markStudentPaymentInRoster error (GET): ' + err.toString());
+        }
+      } else if (status === 'Rejected') {
+        try {
+          unmarkStudentPaymentInRoster(studentId, feeName);
+        } catch (err) {
+          Logger.log('unmarkStudentPaymentInRoster error (GET): ' + err.toString());
         }
       }
 
@@ -292,12 +298,18 @@ function doPost(e) {
       const studentName = contents.studentName;
       const result = updatePaymentStatusInSheet(studentId, feeName, status, rowNumber, timestamp, studentName);
 
-      // If Approved, mark the student roster sheet with payment info
+      // If Approved, mark the student roster sheet (Sheet 1) with payment info
       if (status === 'Approved') {
         try {
           markStudentPaymentInRoster(studentId, feeName, amount);
         } catch (err) {
           Logger.log('markStudentPaymentInRoster error: ' + err.toString());
+        }
+      } else if (status === 'Rejected') {
+        try {
+          unmarkStudentPaymentInRoster(studentId, feeName);
+        } catch (err) {
+          Logger.log('unmarkStudentPaymentInRoster error: ' + err.toString());
         }
       }
 
@@ -1093,6 +1105,56 @@ function markStudentPaymentInRoster(studentId, feeName, amount) {
   }
   
   Logger.log('markStudentPaymentInRoster: Student ' + studentId + ' not found in Sheet 1');
+}
+
+/**
+ * Clear or unmark payment in Sheet 1 if status is changed to Rejected
+ */
+function unmarkStudentPaymentInRoster(studentId, feeName) {
+  if (!studentId || !feeName) return;
+  
+  const ss = getSpreadsheet();
+  const sheets = ss.getSheets();
+  const sheet = sheets[0]; // Target Sheet 1
+  if (!sheet) return;
+  
+  const data = sheet.getDataRange().getValues();
+  if (data.length === 0) return;
+  const headers = data[0];
+  
+  let feeColIdx = -1;
+  const cleanFeeName = feeName.toString().trim().toLowerCase();
+  for (let c = 0; c < headers.length; c++) {
+    if (headers[c] && headers[c].toString().trim().toLowerCase() === cleanFeeName) {
+      feeColIdx = c;
+      break;
+    }
+  }
+  if (feeColIdx === -1) return;
+  
+  let idColIdx = findColumnIndex(headers, ['เลขประจำตัว', 'รหัสนักศึกษา', 'student id', 'id']);
+  let nameColIdx = findColumnIndex(headers, ['ชื่อ', 'ชื่อ-นามสกุล', 'ชื่อนักศึกษา', 'name', 'student name']);
+  if (idColIdx === -1) idColIdx = 0;
+
+  const cleanSearchId = studentId ? studentId.toString().replace(/[^0-9a-zA-Z]/g, '').trim().toLowerCase() : '';
+  const cleanSearchName = studentId ? studentId.toString().replace(/\s+/g, '').trim().toLowerCase() : '';
+
+  for (let i = 1; i < data.length; i++) {
+    const rowId = data[i][idColIdx] ? data[i][idColIdx].toString().replace(/[^0-9a-zA-Z]/g, '').trim().toLowerCase() : '';
+    const rowName = (nameColIdx !== -1 && data[i][nameColIdx]) ? data[i][nameColIdx].toString().replace(/\s+/g, '').trim().toLowerCase() : '';
+    
+    const idMatches = cleanSearchId && rowId && (rowId === cleanSearchId || rowId.includes(cleanSearchId) || cleanSearchId.includes(rowId));
+    const nameMatches = cleanSearchName && rowName && (rowName.includes(cleanSearchName) || cleanSearchName.includes(rowName));
+
+    if (idMatches || nameMatches) {
+      const cell = sheet.getRange(i + 1, feeColIdx + 1);
+      cell.clearContent();
+      cell.clearFormat();
+      SpreadsheetApp.flush();
+      Logger.log('Unmarked Sheet 1 payment for student ' + studentId + ': ' + feeName);
+      return;
+    }
+  }
 }
 
 /**
