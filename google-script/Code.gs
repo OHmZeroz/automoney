@@ -1054,14 +1054,21 @@ function markStudentPaymentInRoster(studentId, feeName, amount) {
     Logger.log('Created new fee column: ' + feeName + ' at index ' + feeColIdx);
   }
   
-  // Find student row
-  const cleanSearchId = studentId.toString().split('.')[0].replace(/[^0-9a-zA-Z]/g, '').trim().toLowerCase();
-  
+  // Find student row by Student ID OR Student Name in Roster
+  const cleanSearchId = studentId ? studentId.toString().replace(/[^0-9a-zA-Z]/g, '').trim().toLowerCase() : '';
+  const cleanSearchName = studentId ? studentId.toString().replace(/\s+/g, '').trim().toLowerCase() : '';
+
+  // Also check name column index in roster
+  const nameColIdx = findColumnIndex(headers, ['ชื่อ', 'ชื่อ-นามสกุล', 'ชื่อนักศึกษา', 'name', 'student name']);
+
   for (let i = 1; i < data.length; i++) {
-    if (!data[i][idColIdx]) continue;
-    const cleanRowId = data[i][idColIdx].toString().split('.')[0].replace(/[^0-9a-zA-Z]/g, '').trim().toLowerCase();
+    const rowId = data[i][idColIdx] ? data[i][idColIdx].toString().replace(/[^0-9a-zA-Z]/g, '').trim().toLowerCase() : '';
+    const rowName = (nameColIdx !== -1 && data[i][nameColIdx]) ? data[i][nameColIdx].toString().replace(/\s+/g, '').trim().toLowerCase() : '';
     
-    if (cleanRowId === cleanSearchId) {
+    const idMatches = cleanSearchId && rowId && (rowId === cleanSearchId || rowId.includes(cleanSearchId) || cleanSearchId.includes(rowId));
+    const nameMatches = cleanSearchName && rowName && (rowName.includes(cleanSearchName) || cleanSearchName.includes(rowName));
+
+    if (idMatches || nameMatches) {
       // Check if there's already a value (accumulate payments)
       const existingVal = sheet.getRange(i + 1, feeColIdx + 1).getValue();
       let totalPaid = parseFloat(amount) || 0;
