@@ -1451,19 +1451,29 @@ async function postToGasReliable(data) {
     throw new Error('ยังไม่ได้ตั้งค่า Google Script URL');
   }
 
-  console.log('[postToGasReliable] Sending POST to GAS:', data.action, Object.keys(data));
+  // Attach parameters to URL query string so mobile Safari/Chrome preserve them on 302 redirects
+  const params = new URLSearchParams();
+  for (const key in data) {
+    if (data[key] !== null && data[key] !== undefined && typeof data[key] !== 'object') {
+      params.append(key, data[key]);
+    }
+  }
+
+  const fetchUrl = gasUrl + (gasUrl.includes('?') ? '&' : '?') + params.toString();
+
+  console.log('[postToGasReliable] Sending request to GAS:', data.action, fetchUrl);
 
   try {
-    await fetch(gasUrl, {
+    await fetch(fetchUrl, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(data)
     });
-    console.log('[postToGasReliable] POST sent successfully (opaque response expected with no-cors)');
+    console.log('[postToGasReliable] Request sent successfully');
     return { status: 'success' };
   } catch (err) {
-    console.error('[postToGasReliable] POST failed:', err);
+    console.error('[postToGasReliable] Request failed:', err);
     throw err;
   }
 }
