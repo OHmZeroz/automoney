@@ -20,6 +20,7 @@ const CONFIG = {
   FOLDER_ID: '1vVmoWgVS3V0ASdY3TYhSY76kgFYjBV57',
   PAYMENTS_SHEET_NAME: 'รายการชำระเงิน',
   STUDENT_SHEET_NAME: 'รายชื่อนักศึกษา',
+  CHECKIN_SHEET_NAME: 'เช็คชื่อชำระเงิน',
   LINE_BOT_ACCESS_TOKEN: 'OmbD89twbccNRAlcyZkIDZg0xDUhfljd6evysik5i6P2FJtr7Aj5nzzrZz60GuBHsec4A5wmaQBu5+O3+jRdBZKVT3LmEC0bOkxP2adqviLlFb1S/SKHHst4feS1LppWjYkRj7n0BVf7vCJCDpG0pwdB04t89/1O/w1cDnyilFU='
 };
 
@@ -1021,18 +1022,61 @@ function notifyPaymentSuccess(studentId, feeName) {
 }
 
 /**
- * Mark payment in the student roster (รายชื่อนักศึกษา) sheet.
- * Finds (or creates) a column for the fee name, then writes "✅ {amount} บาท" 
- * in the student's row. If the student has already paid some amount, it accumulates.
+ * Get or Initialize Dedicated Check-in / Payment Tracking Sheet (ตารางเช็คชื่อชำระเงิน)
+ */
+function getOrCreateCheckinSheet() {
+  const ss = getSpreadsheet();
+  let sheet = ss.getSheetByName(CONFIG.CHECKIN_SHEET_NAME);
+  
+  if (!sheet) {
+    // Try to use Sheet 1 if it exists, or insert new sheet
+    const sheets = ss.getSheets();
+    sheet = sheets[0];
+    if (!sheet || (sheet.getName() !== CONFIG.CHECKIN_SHEET_NAME && sheet.getName() !== 'ชีต1' && sheet.getName() !== 'Sheet1')) {
+      sheet = ss.insertSheet(CONFIG.CHECKIN_SHEET_NAME, 0); // Insert at index 0 (Sheet 1)
+    } else {
+      try { sheet.setName(CONFIG.CHECKIN_SHEET_NAME); } catch(e) {}
+    }
+    
+    // Copy student list from 'รายชื่อนักศึกษา' if empty
+    if (sheet.getLastRow() === 0) {
+      const rosterSheet = ss.getSheetByName(CONFIG.STUDENT_SHEET_NAME);
+      let initialData = [
+        ['รหัสนักศึกษา', 'ชื่อ-นามสกุล', 'LINE ID']
+      ];
+      
+      if (rosterSheet) {
+        const rosterValues = rosterSheet.getDataRange().getValues();
+        if (rosterValues.length > 1) {
+          initialData = rosterValues.map(row => [row[0] || '', row[1] || '', row[2] || '']);
+        }
+      }
+      
+      initialData.forEach(row => sheet.appendRow(row));
+      
+      // Format Header Row
+      const headerRange = sheet.getRange(1, 1, 1, Math.max(3, sheet.getLastColumn()));
+      headerRange.setBackground('#06C755'); // LINE Green header
+      headerRange.setFontColor('#ffffff');
+      headerRange.setFontWeight('bold');
+      headerRange.setHorizontalAlignment('center');
+    }
+  }
+  
+  return sheet;
+}
+
+/**
+ * Mark payment in dedicated check-in sheet ('เช็คชื่อชำระเงิน').
+ * Creates fee column if missing (Columns D, E, F, G...) and sets "✅ จ่ายแล้ว (X บาท)" for student.
  */
 function markStudentPaymentInRoster(studentId, feeName, amount) {
   if (!studentId || !feeName) return;
   
   const ss = getSpreadsheet();
-  const sheets = ss.getSheets();
-  const sheet = sheets[0]; // Target Sheet 1 (ชีตแรก)
+  const sheet = getOrCreateCheckinSheet();
   if (!sheet) {
-    Logger.log('markStudentPaymentInRoster: Sheet 1 not found');
+    Logger.log('markStudentPaymentInRoster: Checkin sheet not found');
     return;
   }
   
@@ -1064,10 +1108,10 @@ function markStudentPaymentInRoster(studentId, feeName, amount) {
     newHeaderCell.setFontColor('#ffffff');
     newHeaderCell.setFontWeight('bold');
     newHeaderCell.setHorizontalAlignment('center');
-    Logger.log('Created new fee column in Sheet 1: ' + feeName + ' at column ' + (feeColIdx + 1));
+    Logger.log('Created new fee column in Checkin Sheet: ' + feeName + ' at column ' + (feeColIdx + 1));
   }
   
-  // Find student row by Student ID OR Student Name in Sheet 1
+  // Find student row by Student ID OR Student Name in Checkin Sheet
   const cleanSearchId = studentId ? studentId.toString().replace(/[^0-9a-zA-Z]/g, '').trim().toLowerCase() : '';
   const cleanSearchName = studentId ? studentId.toString().replace(/\s+/g, '').trim().toLowerCase() : '';
 
@@ -1099,23 +1143,22 @@ function markStudentPaymentInRoster(studentId, feeName, amount) {
       cell.setHorizontalAlignment('center');
       
       SpreadsheetApp.flush();
-      Logger.log('Marked Sheet 1 payment for student ' + studentId + ': ' + feeName + ' = ' + totalPaid + ' บาท');
+      Logger.log('Marked Checkin Sheet payment for student ' + studentId + ': ' + feeName + ' = ' + totalPaid + ' บาท');
       return;
     }
   }
   
-  Logger.log('markStudentPaymentInRoster: Student ' + studentId + ' not found in Sheet 1');
+  Logger.log('markStudentPaymentInRoster: Student ' + studentId + ' not found in Checkin Sheet');
 }
 
 /**
- * Clear or unmark payment in Sheet 1 if status is changed to Rejected
+ * Clear or unmark payment in Checkin Sheet if status is changed to Rejected
  */
 function unmarkStudentPaymentInRoster(studentId, feeName) {
   if (!studentId || !feeName) return;
   
   const ss = getSpreadsheet();
-  const sheets = ss.getSheets();
-  const sheet = sheets[0]; // Target Sheet 1
+  const sheet = getOrCreateCheckinSheet();
   if (!sheet) return;
   
   const data = sheet.getDataRange().getValues();
@@ -1151,10 +1194,40 @@ function unmarkStudentPaymentInRoster(studentId, feeName) {
       cell.clearContent();
       cell.clearFormat();
       SpreadsheetApp.flush();
-      Logger.log('Unmarked Sheet 1 payment for student ' + studentId + ': ' + feeName);
+      Logger.log('Unmarked Checkin Sheet payment for student ' + studentId + ': ' + feeName);
       return;
     }
   }
+}
+
+/**
+ * [รันครั้งเดียวใน Apps Script] สแกนรายการชำระเงินที่อนุมัติแล้วทั้งหมด แล้วนำไปใส่ในแท็บ 'เช็คชื่อชำระเงิน' ย้อนหลังให้อัตโนมัติ
+ */
+function backfillApprovedPaymentsToCheckinSheet() {
+  const ss = getSpreadsheet();
+  const paymentSheet = ss.getSheetByName(CONFIG.PAYMENTS_SHEET_NAME);
+  if (!paymentSheet) {
+    Logger.log('ไม่พบชีตรายการชำระเงิน');
+    return;
+  }
+
+  const data = paymentSheet.getDataRange().getValues();
+  if (data.length <= 1) return;
+
+  Logger.log('กำลังซิงก์ข้อมูลชำระเงินย้อนหลังไปแท็บ เช็คชื่อชำระเงิน...');
+
+  for (let i = 1; i < data.length; i++) {
+    const studentName = data[i][1];
+    const studentId = data[i][2];
+    const feeName = data[i][3];
+    const amount = data[i][4];
+    const status = data[i][5];
+
+    if (status === 'Approved' || status === 'อนุมัติแล้ว') {
+      markStudentPaymentInRoster(studentId || studentName, feeName, amount);
+    }
+  }
+  Logger.log('ซิงก์ข้อมูลย้อนหลังเสร็จสิ้น!');
 }
 
 /**
