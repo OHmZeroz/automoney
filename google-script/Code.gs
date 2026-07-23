@@ -151,6 +151,45 @@ function doGet(e) {
       return createJsonResponse({ status: 'success', data: items });
     }
 
+    // --- Action 4: Update Payment Status via GET (CORS-friendly for admin panel) ---
+    if (action === 'updatePaymentStatus') {
+      const studentId = e.parameter.studentId || '';
+      const feeName = e.parameter.feeName || '';
+      const status = e.parameter.status || '';
+      const amount = parseFloat(e.parameter.amount) || 0;
+      const rowNumber = e.parameter.rowNumber ? parseInt(e.parameter.rowNumber) : null;
+      const studentName = e.parameter.studentName || '';
+
+      if (!status) {
+        return createJsonResponse({ status: 'error', message: 'กรุณาระบุสถานะ (Approved/Rejected)' });
+      }
+
+      const result = updatePaymentStatusInSheet(studentId, feeName, status, rowNumber, null, studentName);
+
+      // If Approved, mark the student roster sheet with payment info
+      if (status === 'Approved') {
+        try {
+          markStudentPaymentInRoster(studentId, feeName, amount);
+        } catch (err) {
+          Logger.log('markStudentPaymentInRoster error (GET): ' + err.toString());
+        }
+      }
+
+      // Send LINE notification to the student
+      try {
+        const studentLineId = getStudentLineUserId(studentId);
+        if (studentLineId) {
+          const statusText = status === 'Approved' ? '✅ อนุมัติเรียบร้อยแล้ว' : '❌ ถูกปฏิเสธ (กรุณาตรวจสอบสลิปใหม่อีกครั้ง)';
+          const pushMsg = `📢 แจ้งเตือนสถานะการชำระเงิน\n📚 รายการ: ${feeName}\nสถานะ: ${statusText}`;
+          sendLinePushMessage(studentLineId, pushMsg);
+        }
+      } catch (err) {
+        Logger.log('Student status push alert error (GET): ' + err.toString());
+      }
+
+      return createJsonResponse(result);
+    }
+
     // Default: Get all payments (for admin verification panel)
     const sheet = getOrCreatePaymentsSheet();
     const data = sheet.getDataRange().getValues();

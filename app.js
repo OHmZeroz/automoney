@@ -1150,31 +1150,45 @@ function viewAdminSlip(subId) {
 
 async function updateStatus(subId, newStatus) {
   const sub = submissions.find(s => s.id === subId);
-  if (sub) {
-    sub.status = newStatus;
-    localStorage.setItem('kmitl_pay_submissions', JSON.stringify(submissions));
-    renderAdminDashboard();
-    showToast(`อัปเดตสถานะเป็น ${newStatus === 'Approved' ? 'อนุมัติ' : 'ปฏิเสธ'} เรียบร้อยแล้ว`, newStatus === 'Approved' ? 'success' : 'error');
+  if (!sub) return;
 
-    // ส่งสถานะไปอัปเดตใน Google Sheet ด้วย
-    if (CONFIG.GOOGLE_SCRIPT_URL) {
-      try {
-        const rowNumber = subId.startsWith('gas-') ? parseInt(subId.split('-')[1]) + 2 : null;
-        await postToGasReliable({
-          action: 'updatePaymentStatus',
-          studentId: sub.studentEmail || sub.studentId || '',
-          feeName: sub.feeName || '',
-          status: newStatus,
-          amount: sub.amount || 0,
-          rowNumber: rowNumber,
-          timestamp: sub.timestamp || '',
-          studentName: sub.studentName || ''
-        });
-        showToast('อัปเดตสถานะใน Google Sheet เรียบร้อยแล้ว 🟢', 'success');
-      } catch (err) {
-        console.warn('Update status in Sheet error:', err);
-        showToast('อัปเดตสถานะใน Local สำเร็จ แต่ส่งไป Sheet ไม่สำเร็จ', 'error');
+  // Immediately update local state and UI
+  sub.status = newStatus;
+  localStorage.setItem('kmitl_pay_submissions', JSON.stringify(submissions));
+  renderAdminDashboard();
+  showToast(`กำลังอัปเดตสถานะเป็น ${newStatus === 'Approved' ? 'อนุมัติ' : 'ปฏิเสธ'}...`, 'info');
+
+  // Send status update to Google Sheet via GET (CORS-friendly)
+  if (CONFIG.GOOGLE_SCRIPT_URL) {
+    try {
+      const rowNumber = subId.startsWith('gas-') ? parseInt(subId.split('-')[1]) + 2 : '';
+      const params = new URLSearchParams({
+        action: 'updatePaymentStatus',
+        studentId: sub.studentEmail || sub.studentId || '',
+        feeName: sub.feeName || '',
+        status: newStatus,
+        amount: sub.amount || 0,
+        rowNumber: rowNumber,
+        studentName: sub.studentName || '',
+        t: Date.now()
+      });
+      const url = CONFIG.GOOGLE_SCRIPT_URL + (CONFIG.GOOGLE_SCRIPT_URL.includes('?') ? '&' : '?') + params.toString();
+
+      const response = await fetch(url);
+      const result = await response.json();
+
+      if (result && result.status === 'success') {
+        showToast(`อัปเดตสถานะใน Google Sheet เรียบร้อยแล้ว 🟢 ${result.message || ''}`, 'success');
+      } else {
+        showToast('Sheet ตอบกลับ: ' + (result.message || 'ไม่สามารถอัปเดตได้'), 'error');
       }
+
+      // Re-fetch from Sheet after a short delay to confirm the update
+      setTimeout(fetchSubmissionsFromGas, 2000);
+
+    } catch (err) {
+      console.warn('Update status in Sheet error:', err);
+      showToast('อัปเดตสถานะใน Local สำเร็จ แต่ส่งไป Sheet ไม่สำเร็จ: ' + err.message, 'error');
     }
   }
 }
